@@ -12,7 +12,7 @@ import { diffScopes, diffSignals, nextDelayMs, type PollSnapshot } from "./poll"
 export interface ServiceDeps {
   client: TinkererClient;
   /** Current effective settings, re-read on every use so saves apply live. */
-  settings: () => { pollIntervalSeconds: number; defaultTimeline: boolean };
+  settings: () => { pollIntervalSeconds: number; defaultTimeline: boolean; toasts?: "all" | "live" | "none" };
   kv: { get<T>(key: string): Promise<T | undefined>; set(key: string, value: unknown): Promise<void> };
   publish: (signal: RealtimeSignal) => void;
   log: { info(message: string): void; warn(message: string): void };
@@ -125,7 +125,10 @@ export function createTinkererService(deps: ServiceDeps): TinkererService {
       deps.client.invalidate("event/");
       deps.publish({ kind: "changed", scopes });
     }
+    const toasts = deps.settings().toasts ?? "all";
     for (const signal of signals) {
+      if (toasts === "none") break;
+      if (toasts === "live" && signal.kind !== "live") continue;
       if (signal.kind === "dm") {
         deps.publish({
           kind: "toast",

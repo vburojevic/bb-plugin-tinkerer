@@ -13,6 +13,7 @@ import { ToastBridge, UnreadAccessory } from "./app/Bridges";
 import { TinkererDirective } from "./app/Directive";
 import { FooterMenu } from "./app/FooterMenu";
 import { PANEL_PATH, parseSubPath, subPathFor, TinkererPanel, type PanelRoute } from "./app/Panel";
+import { ConnectionSection } from "./app/Settings";
 
 function NavPanel({ subPath }: PluginNavPanelProps) {
   const navigate = useBbNavigate();
@@ -50,6 +51,13 @@ export default definePluginApp((app) => {
     label: "Tinkerer Club",
     icon: "tinkerer/mark",
     component: FooterMenu,
+  });
+
+  app.slots.settingsSection({
+    id: "connection",
+    title: "Connection",
+    description: "Whether the key above works, and who Tinkerer Club thinks you are.",
+    component: ConnectionSection,
   });
 
   app.slots.messageDirective({ id: "tinkerer", component: TinkererDirective });

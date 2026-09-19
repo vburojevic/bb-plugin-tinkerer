@@ -24,6 +24,13 @@ it. Agents cite posts with `::tinkerer{post="…"}`, rendered as a live card.
 A bundled skill teaches the API, the MCP endpoint, the polling rule, and the
 etiquette, and `bb tinkerer` covers the same ground from a shell.
 
+## Settings that matter
+
+Your API key (secret, on this machine only), how often to check for updates,
+which arrivals get a desktop toast, the composer's default visibility, and two
+agent guardrails: confirm before an agent posts, and whether the generic tool
+may write. A connection card shows whether the key works.
+
 ## Stays quiet
 
 There are no webhooks, so a background service polls unread counts and the

@@ -9,6 +9,8 @@ export interface CliDeps {
   status: () => Status;
   refresh: () => Promise<Status>;
   settings: () => { defaultTimeline: boolean };
+  setDemoMode: (on: boolean) => Promise<void>;
+  isDemoMode: () => boolean;
   createPost: (draft: ComposeInput) => Promise<Post>;
   lockIn: {
     state: () => Promise<{ state: LockInState; todos: LockInTodo[] }>;
@@ -243,6 +245,19 @@ export function buildCli(deps: CliDeps) {
           } catch (cause) {
             return rethrow(cause);
           }
+        },
+      }),
+      demo: cliCommand({
+        summary: "Switch the panel to a fictional club (on) or back to your account (off)",
+        hidden: true,
+        positionals: [{ name: "state", description: "on, off, or status", required: true }],
+        options: { json },
+        async run(input) {
+          const state = input.positionals.state;
+          if (state === "on" || state === "off") await deps.setDemoMode(state === "on");
+          else if (state !== "status") throw new PluginCliError(`Expected on, off or status, got "${state}".`, { code: "bad_state" });
+          const on = deps.isDemoMode();
+          return out(input.options.json, { demo: on }, on ? "Demo mode on: the panel shows a fictional club." : "Demo mode off: the panel shows your account.");
         },
       }),
       "lockin done": cliCommand({

@@ -7,7 +7,8 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { buildCli } from "./lib/cli";
-import { TINKERER_BASE_URL, createTinkererClient } from "./lib/client";
+import { TINKERER_BASE_URL, createTinkererClient, type TinkererClient } from "./lib/client";
+import { createDemoClient } from "./lib/demo";
 import {
   REALTIME_CHANNEL,
   rpcContract,
@@ -48,32 +49,39 @@ export default async function plugin(bb: BbPluginApi) {
     apiKey: {
       type: "string",
       label: "Tinkerer Club API key",
-      description: "Your personal key (starts with tnk_). Create one at https://app.tinkerer.club under Settings → API keys. It stays on this machine.",
+      description: "Your personal key, starts with tnk_. Create one at app.tinkerer.club → Settings → API keys. It is stored on this machine only and every request goes out as you.",
       secret: true,
     },
     pollIntervalSeconds: {
       type: "number",
-      label: "Poll interval (seconds)",
-      description: "How often to check unread counts and the live banner. 30–600.",
+      label: "Check for updates every (seconds)",
+      description: "Background cadence for unread counts, new posts, the live banner and your lock-in. 30 to 600. The panel checks every 20 seconds while it is open regardless.",
       experimental_schema: z.number().int().min(30).max(600),
       default: 60,
     },
+    toasts: {
+      type: "select",
+      label: "Desktop toasts",
+      description: "Which arrivals get a toast in bb. Unread counts always show in the sidebar.",
+      options: ["messages, mentions and live", "live broadcasts only", "none"],
+      default: "messages, mentions and live",
+    },
     defaultTimeline: {
       type: "boolean",
-      label: "New posts show on the timeline by default",
-      description: "Off means posts are visible in their topics only unless you flip the toggle.",
+      label: "New posts show on the timeline",
+      description: "The composer's default. Off means a post is visible in its topics only unless you flip it for that post.",
       default: true,
     },
     confirmAgentPosts: {
       type: "boolean",
       label: "Confirm before an agent posts",
-      description: "When on, tinkerer_post opens an approval card in the thread and only your click publishes.",
+      description: "tinkerer_post opens an approval card in the thread showing the exact post. Only your click publishes.",
       default: true,
     },
     allowAgentWrites: {
       type: "boolean",
       label: "Allow agent writes via tinkerer_call",
-      description: "Lets the generic tinkerer_call tool run write procedures (send, like, markRead, …). Read procedures are always allowed.",
+      description: "Lets the generic tinkerer_call tool run write procedures (send, like, markRead, …). Reads are always allowed; tinkerer_post and tinkerer_lockin are unaffected.",
       default: false,
     },
   });
@@ -97,10 +105,31 @@ export default async function plugin(bb: BbPluginApi) {
     }
   };
 
-  const client = createTinkererClient({ getKey: () => current.apiKey ?? "" });
+  // The real client, or the in-memory demo club (`bb tinkerer demo on`) for
+  // screenshots and try-outs. Everything downstream holds this delegating
+  // handle, so flipping the mode never restarts anything.
+  const realClient = createTinkererClient({ getKey: () => current.apiKey ?? "" });
+  const demoClient = createDemoClient();
+  let demoMode = (await bb.storage.kv.get<boolean>("demo-mode")) === true;
+  const active = (): TinkererClient => (demoMode ? demoClient : realClient);
+  const client: TinkererClient = {
+    hasKey: () => active().hasKey(),
+    invalidate: (prefix) => active().invalidate(prefix),
+    call: (path, input, options) => active().call(path, input, options),
+  };
+  async function setDemoMode(on: boolean) {
+    demoMode = on;
+    await bb.storage.kv.set("demo-mode", on);
+    service.reset();
+    await service.refresh();
+  }
   const service = createTinkererService({
     client,
-    settings: () => ({ pollIntervalSeconds: current.pollIntervalSeconds, defaultTimeline: current.defaultTimeline }),
+    settings: () => ({
+      pollIntervalSeconds: current.pollIntervalSeconds,
+      defaultTimeline: current.defaultTimeline,
+      toasts: current.toasts === "none" ? "none" : current.toasts === "live broadcasts only" ? "live" : "all",
+    }),
     kv: bb.storage.kv,
     publish,
     log: bb.log,
@@ -392,6 +421,8 @@ export default async function plugin(bb: BbPluginApi) {
       status: () => service.status(),
       refresh: () => service.refresh(),
       settings: () => ({ defaultTimeline: current.defaultTimeline }),
+      setDemoMode,
+      isDemoMode: () => demoMode,
       createPost,
       lockIn: {
         state: lockInState,
