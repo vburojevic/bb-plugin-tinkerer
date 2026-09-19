@@ -5,14 +5,15 @@ import { useBbContext, useRpc } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { Delete02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import type { LockInState, LockInTodo } from "../lib/contract";
 import { countdown, displayName, formatDuration } from "../lib/format";
-import { ErrorState, Glyph, ListSkeleton, UserAvatar, useAsync, useNow } from "./shared";
-import { invalidateStatus } from "./store";
+import { ErrorState, Glyph, ListSkeleton, Tip, UserAvatar, useAsync, useNow } from "./shared";
+import { invalidateStatus, useChanges } from "./store";
 
 function current(state: LockInState) {
   return state.current && !state.current.endedAt ? state.current : null;
@@ -58,22 +59,28 @@ function Todos({ todos, onChange }: { todos: LockInTodo[]; onChange: (next: Lock
         }}
       >
         <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Next thing to do" aria-label="New todo" className="h-8 text-sm" />
-        <Button type="submit" size="sm" variant="outline" className="h-8" disabled={busy || title.trim().length === 0} aria-label="Add todo">
-          <Glyph icon={PlusSignIcon} size={15} />
-        </Button>
+        <Tip label="Add todo">
+          <Button type="submit" size="sm" variant="outline" className="h-8" disabled={busy || title.trim().length === 0} aria-label="Add todo">
+            <Glyph icon={PlusSignIcon} size={15} />
+          </Button>
+        </Tip>
       </form>
       {todos.length > 0 ? (
-        <ul className="mt-2 divide-y divide-border/60 rounded-lg border border-border bg-card">
+        <Card asChild>
+        <ul className="mt-2 divide-y divide-border/60">
           {todos.map((todo) => (
             <li key={todo.id} className="group flex items-center gap-2.5 px-3 py-2">
               <Checkbox checked={todo.completed === true} onCheckedChange={(checked) => void run(() => rpc.call("lockInTodoUpdate", { id: todo.id, completed: checked === true }))} aria-label={`Mark "${todo.title}" ${todo.completed ? "not done" : "done"}`} />
               <span className={cn("min-w-0 flex-1 truncate text-sm", todo.completed ? "text-muted-foreground line-through" : "text-foreground")}>{todo.title}</span>
-              <Button variant="ghost" size="icon" className="size-6 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100" aria-label={`Delete "${todo.title}"`} onClick={() => void run(() => rpc.call("lockInTodoDelete", { id: todo.id }))}>
-                <Glyph icon={Delete02Icon} size={14} />
-              </Button>
+              <Tip label="Delete">
+                <Button variant="ghost" size="icon" className="size-6 text-muted-foreground opacity-60 hover:opacity-100 focus-visible:opacity-100" aria-label={`Delete "${todo.title}"`} onClick={() => void run(() => rpc.call("lockInTodoDelete", { id: todo.id }))}>
+                  <Glyph icon={Delete02Icon} size={14} />
+                </Button>
+              </Tip>
             </li>
           ))}
         </ul>
+        </Card>
       ) : null}
     </section>
   );
@@ -84,6 +91,7 @@ export function LockIn({ className, threadId: explicitThreadId }: { className?: 
   const context = useBbContext();
   const threadId = explicitThreadId ?? context.threadId ?? null;
   const data = useAsync(() => rpc.call("lockIn"), [rpc]);
+  useChanges(["lockin"], data.reload);
   const [title, setTitle] = useState("");
   const [titleTouched, setTitleTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -126,7 +134,7 @@ export function LockIn({ className, threadId: explicitThreadId }: { className?: 
 
   return (
     <div className={cn("space-y-5", className)}>
-      <section className="rounded-lg border border-border bg-card p-4" aria-label="Lock-in session">
+      <Card className="p-4" role="region" aria-label="Lock-in session">
         {session ? (
           <div className="flex items-center gap-4">
             <div className="min-w-0 flex-1">
@@ -165,7 +173,7 @@ export function LockIn({ className, threadId: explicitThreadId }: { className?: 
             </Button>
           </form>
         )}
-      </section>
+      </Card>
 
       <Todos todos={data.data.todos} onChange={(todos) => data.patch((existing) => ({ ...existing, todos }))} />
 

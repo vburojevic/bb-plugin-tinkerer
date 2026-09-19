@@ -37,6 +37,24 @@ export const reactionSchema = z.looseObject({
   count: z.number(),
 });
 
+export const pollOptionSchema = z.looseObject({
+  id: z.string(),
+  label: z.string(),
+  emoji: nullableString,
+  percentage: nullableNumber,
+  voteCount: nullableNumber,
+});
+export const pollSchema = z.looseObject({
+  id: z.string(),
+  endsAt: nullableString,
+  isEnded: z.boolean().optional(),
+  myOptionId: nullableString,
+  options: z.array(pollOptionSchema),
+  resultsVisible: z.boolean().optional(),
+  totalVoteCount: nullableNumber,
+});
+export type Poll = z.infer<typeof pollSchema>;
+
 export const postSchema = z.looseObject({
   id: z.string(),
   type: z.string().optional(),
@@ -62,7 +80,7 @@ export const postSchema = z.looseObject({
   likedByMe: z.boolean().optional(),
   myReactions: z.array(z.string()).optional(),
   reactions: z.array(reactionSchema).optional(),
-  poll: z.unknown().optional(),
+  poll: pollSchema.nullable().optional(),
 });
 export type Post = z.infer<typeof postSchema>;
 
@@ -149,6 +167,8 @@ export const topicSchema = z.looseObject({
   name: z.string(),
   emoji: nullableString,
   kind: z.string().optional(),
+  /** Posts filed under the topic; from topic/listWithStats. */
+  posts: z.number().optional(),
 });
 export type Topic = z.infer<typeof topicSchema>;
 
@@ -298,16 +318,19 @@ export const composeInputSchema = z.object({
 export type ComposeInput = z.infer<typeof composeInputSchema>;
 
 export const REALTIME_CHANNEL = "tinkerer";
-/** Payloads on the realtime channel. `status` means re-fetch; `toast` shows one. */
+/** What a poll found different from the previous one; views refetch what they show. */
+export type ChangeScope = "timeline" | "notifications" | "messages" | "topics" | "lockin" | "live";
+/** Payloads on the realtime channel. `status` means re-fetch the snapshot; `changed` names what moved; `toast` shows one. */
 export type RealtimeSignal =
   | { kind: "status" }
+  | { kind: "changed"; scopes: ChangeScope[] }
   | { kind: "toast"; tone: "info" | "success"; title: string; description?: string; href?: string };
 
 export const rpcContract = defineRpcContract({
   status: { input: z.null(), output: statusSchema },
   refresh: { input: z.null(), output: statusSchema },
   timeline: {
-    input: z.object({ cursor: z.string().optional(), topic: z.string().optional() }).strict(),
+    input: z.object({ cursor: z.string().optional(), hashtag: z.string().optional(), topic: z.string().optional() }).strict(),
     output: z.object({ items: z.array(postSchema), nextCursor: z.string().nullable() }),
   },
   trending: { input: z.null(), output: z.array(z.object({ slug: z.string(), postCount: z.number() })) },
@@ -319,6 +342,7 @@ export const rpcContract = defineRpcContract({
   addComment: { input: z.object({ postId: z.string(), content: z.string().trim().min(1).max(4000) }).strict(), output: commentSchema },
   like: { input: z.object({ postId: z.string(), liked: z.boolean() }).strict(), output: postSchema },
   bookmark: { input: z.object({ postId: z.string() }).strict(), output: postSchema },
+  votePoll: { input: z.object({ postId: z.string(), optionId: z.string() }).strict(), output: postSchema },
   notifications: {
     input: z.object({ cursor: z.string().optional() }).strict(),
     output: z.object({ items: z.array(notificationSchema), nextCursor: z.string().nullable() }),
@@ -359,6 +383,7 @@ export const rpcContract = defineRpcContract({
   lockInTodoDelete: { input: z.object({ id: z.string() }).strict(), output: z.array(lockInTodoSchema) },
   live: { input: z.null(), output: z.object({ banner: liveBannerSchema.nullable(), upcoming: z.array(calendarEventSchema) }) },
   composerData: { input: z.null(), output: z.object({ topics: z.array(topicSchema), projects: z.array(projectSchema) }) },
+  topics: { input: z.null(), output: z.array(topicSchema) },
   previewLink: { input: z.object({ url: z.string().url() }).strict(), output: linkPreviewSchema.nullable() },
   createPost: { input: composeInputSchema, output: postSchema },
   threadTitle: { input: z.object({ threadId: z.string() }).strict(), output: z.object({ title: z.string().nullable() }) },

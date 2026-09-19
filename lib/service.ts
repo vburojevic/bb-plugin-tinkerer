@@ -7,7 +7,7 @@
 import { TinkererError, type TinkererClient } from "./client";
 import type { Author, LiveBanner, LockInSession, LockInState, RealtimeSignal, Status, Unread, Conversation, TopicChat } from "./contract";
 import { displayName, excerpt } from "./format";
-import { diffSignals, nextDelayMs, type PollSnapshot } from "./poll";
+import { diffScopes, diffSignals, nextDelayMs, type PollSnapshot } from "./poll";
 
 export interface ServiceDeps {
   client: TinkererClient;
@@ -87,30 +87,44 @@ export function createTinkererService(deps: ServiceDeps): TinkererService {
     if (me === null) {
       me = await deps.client.call<Author>("user/getCurrentUser", {}, { ttlMs: 10 * 60_000 });
     }
-    const [notifications, dms, topics, banner, lockState] = await Promise.all([
+    const [notifications, dms, messages, topics, banner, lockState, latest] = await Promise.all([
       deps.client.call<number>("notification/unreadCount", {}),
       deps.client.call<number>("messaging/dmUnreadCount", {}),
+      deps.client.call<number>("messaging/unreadCount", {}),
       deps.client.call<TopicChat[]>("topicChat/activeTopics", {}),
       deps.client.call<LiveBanner | null>("event/liveBanner", {}),
       deps.client.call<LockInState>("lockIn/state", {}),
+      deps.client.call<{ items: Array<{ id: string }> }>("post/timeline", { limit: 1, supportsSparsePages: true }),
     ]);
     const mentions = topics.reduce((sum, topic) => sum + (topic.unreadMentionCount ?? 0), 0);
+    const topicMessages = topics.reduce((sum, topic) => sum + (topic.messageCount ?? 0), 0);
+    const running = lockState.current && !lockState.current.endedAt ? lockState.current : null;
     const next: PollSnapshot = {
       notifications,
       dms,
       mentions,
       liveId: banner?.id ?? null,
       liveStartsAt: banner?.startsAt ?? null,
+      latestPostId: latest.items[0]?.id ?? null,
+      messages,
+      topicMessages,
+      lockInId: running?.id ?? null,
     };
     const signals = diffSignals(snapshot, next);
+    const scopes = diffScopes(snapshot, next);
     snapshot = next;
     await deps.kv.set(KV_SNAPSHOT, next);
     connected = true;
     error = null;
     unread = { notifications, dms, mentions, total: notifications + dms + mentions };
     live = banner ?? null;
-    const current = lockState.current;
-    lockIn = current !== null && !current.endedAt ? current : null;
+    lockIn = running;
+    if (scopes.length > 0) {
+      deps.client.invalidate("post/");
+      deps.client.invalidate("topicChat/");
+      deps.client.invalidate("event/");
+      deps.publish({ kind: "changed", scopes });
+    }
     for (const signal of signals) {
       if (signal.kind === "dm") {
         deps.publish({

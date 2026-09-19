@@ -9,6 +9,20 @@ export function mediaUrl(path: string | null | undefined): string | null {
   return `${TINKERER_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
+declare const __BB_PLUGIN_ID__: string | undefined;
+
+/** Post media needs the API key, so it is fetched through the plugin's proxy route. */
+export function postMediaUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^https?:\/\//.test(path)) return path;
+  const pluginId = typeof __BB_PLUGIN_ID__ === "string" ? __BB_PLUGIN_ID__ : "tinkerer";
+  return `/api/v1/plugins/${pluginId}/http/media?p=${encodeURIComponent(path)}`;
+}
+
+export function isVideoPath(path: string): boolean {
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(path);
+}
+
 export function avatarUrl(author: Author | null | undefined): string | null {
   if (!author) return null;
   return mediaUrl(author.avatarImageUrl) ?? mediaUrl(author.image) ?? mediaUrl(author.gravatarUrl);

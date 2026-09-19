@@ -1,11 +1,13 @@
 // Live: the banner when a broadcast is on or scheduled, then the week ahead.
 import { UrlLink, useRpc } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import type { LiveBanner } from "../lib/contract";
 import { TINKERER_BASE_URL } from "../lib/client";
 import { EmptyState, ErrorState, ListSkeleton, shortDateTime, useAsync } from "./shared";
+import { useChanges } from "./store";
 
 export function liveUrl(banner: LiveBanner): string {
   if (banner.url) return banner.url;
@@ -23,7 +25,7 @@ export function isLiveNow(banner: LiveBanner, now = Date.now()): boolean {
 export function LiveCard({ banner, compact = false }: { banner: LiveBanner; compact?: boolean }) {
   const live = isLiveNow(banner);
   return (
-    <div className={cn("rounded-lg border border-border bg-card", compact ? "p-3" : "p-4")}>
+    <Card className={compact ? "p-3" : "p-4"}>
       <div className="flex items-center gap-2 text-xs">
         {live ? <span className="tk-live-dot" aria-hidden /> : null}
         <span className={cn("font-medium", live ? "text-foreground" : "text-muted-foreground")}>{live ? "Live now" : `Starts ${shortDateTime(banner.startsAt)}`}</span>
@@ -35,13 +37,14 @@ export function LiveCard({ banner, compact = false }: { banner: LiveBanner; comp
           <UrlLink href={liveUrl(banner)}>{live ? "Join the broadcast" : "Open event"}</UrlLink>
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
 export function Live({ className }: { className?: string }) {
   const rpc = useRpc<typeof rpcContract>();
   const data = useAsync(() => rpc.call("live"), [rpc]);
+  useChanges(["live"], data.reload);
   if (data.error) return <ErrorState message={data.error} onRetry={data.reload} />;
   if (data.loading || !data.data) return <ListSkeleton rows={2} />;
   const { banner, upcoming } = data.data;
@@ -53,7 +56,8 @@ export function Live({ className }: { className?: string }) {
         {upcoming.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No events on the calendar for the next seven days.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-border/60 rounded-lg border border-border bg-card">
+          <Card asChild>
+          <ul className="mt-2 divide-y divide-border/60">
             {upcoming.map((event) => (
               <li key={event.id} className="flex items-center gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
@@ -69,6 +73,7 @@ export function Live({ className }: { className?: string }) {
               </li>
             ))}
           </ul>
+          </Card>
         )}
       </section>
     </div>

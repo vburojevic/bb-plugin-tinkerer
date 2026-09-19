@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffSignals, nextDelayMs, type PollSnapshot } from "./poll";
+import { diffScopes, diffSignals, nextDelayMs, type PollSnapshot } from "./poll";
 
 const base: PollSnapshot = {
   notifications: 0,
@@ -43,5 +43,18 @@ describe("diffSignals", () => {
 
   it("stays silent about plain notification count changes", () => {
     expect(diffSignals(base, { ...base, notifications: 9 })).toEqual([]);
+  });
+});
+
+describe("diffScopes", () => {
+  it("names exactly the views whose data moved", () => {
+    expect(diffScopes(null, base)).toEqual([]);
+    expect(diffScopes(base, base)).toEqual([]);
+    expect(diffScopes(base, { ...base, latestPostId: "p2" })).toEqual(["timeline"]);
+    expect(diffScopes({ ...base, notifications: 2 }, { ...base, notifications: 1 })).toEqual(["notifications"]);
+    expect(diffScopes(base, { ...base, messages: 3 })).toEqual(["messages"]);
+    expect(diffScopes(base, { ...base, topicMessages: 40 })).toEqual(["topics"]);
+    expect(diffScopes({ ...base, lockInId: "l1" }, base)).toEqual(["lockin"]);
+    expect(diffScopes(base, { ...base, liveStartsAt: "2026-09-20T10:00:00Z" })).toEqual(["live"]);
   });
 });

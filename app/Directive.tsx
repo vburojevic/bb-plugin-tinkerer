@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRpc, type PluginMessageDirectiveProps } from "@get-bb/plugin-sdk/app";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { rpcContract } from "../server";
 import type { Post } from "../lib/contract";
 import { PostCard } from "./PostCard";
@@ -68,10 +69,10 @@ export function TinkererDirective({ attributes, source }: PluginMessageDirective
 
   if (!valid || failed) return <code className="text-xs">{source}</code>;
 
-  const card = post === null ? (
-    <Skeleton className="h-24 w-full rounded-lg" aria-label="Loading post" />
-  ) : (
-    <PostCard post={post} onChange={setPost} compact className="tk-stack-card border-0" />
+  const card = (
+    <TooltipProvider>
+      {post === null ? <Skeleton className="h-24 w-full rounded-lg" aria-label="Loading post" /> : <PostCard post={post} onChange={setPost} compact className="tk-stack-card border-0" />}
+    </TooltipProvider>
   );
 
   if (inline) return <div className="tk-root my-2">{card}</div>;

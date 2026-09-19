@@ -30,7 +30,7 @@ export default definePluginApp((app) => {
   app.slots.navPanel({
     id: "tinkerer",
     title: "Tinkerer",
-    icon: "Zap",
+    icon: "tinkerer/mark",
     path: PANEL_PATH,
     component: NavPanel,
     experimental_sidebarAccessory: UnreadAccessory,
@@ -39,7 +39,7 @@ export default definePluginApp((app) => {
   app.slots.threadPanelAction({
     id: "tinkerer",
     title: "Tinkerer Club",
-    icon: "Zap",
+    icon: "tinkerer/mark",
     layout: "flush",
     component: ThreadPanel,
   });
@@ -48,7 +48,7 @@ export default definePluginApp((app) => {
     kind: "disclosure",
     id: "menu",
     label: "Tinkerer Club",
-    icon: "Zap",
+    icon: "tinkerer/mark",
     component: FooterMenu,
   });
 

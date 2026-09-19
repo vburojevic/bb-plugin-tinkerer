@@ -2,9 +2,11 @@
 // The nav panel keeps the tab in the route (`subPath`) so back/forward walk
 // it; the thread side panel keeps it in state. Both render this.
 import { useState, type ReactNode } from "react";
-import { useBbNavigate, useRpc, useSettings } from "@get-bb/plugin-sdk/app";
+import { useRpc } from "@get-bb/plugin-sdk/app";
 import { Add01Icon, Key01Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import { Composer } from "./Composer";
@@ -12,8 +14,8 @@ import { Inbox, type InboxTab } from "./Inbox";
 import { Live } from "./Live";
 import { LockIn } from "./LockIn";
 import { Me } from "./Me";
-import { Glyph } from "./shared";
-import { invalidateStatus, useStatus } from "./store";
+import { CountBadge, Glyph, Tip } from "./shared";
+import { invalidateStatus, useLiveRefresh, useStatus } from "./store";
 import { Timeline } from "./Timeline";
 
 export const PANEL_PATH = "tinkerer";
@@ -44,9 +46,7 @@ export function subPathFor(route: PanelRoute): string {
 }
 
 export function ConnectState() {
-  const navigate = useBbNavigate();
   const { status, refresh } = useStatus();
-  void navigate;
   const invalid = status?.keyPresent && status.error;
   return (
     <div className="mx-auto max-w-md py-10 text-center">
@@ -78,29 +78,23 @@ export function TabStrip({ route, onRoute, right }: { route: PanelRoute; onRoute
   const { status } = useStatus();
   const unread = status?.unread.total ?? 0;
   return (
-    <div className="flex items-center gap-1 border-b border-border px-3 py-1.5">
-      <nav aria-label="Tinkerer sections" className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
-        {TABS.map((tab) => {
-          const active = route.tab === tab.id;
-          return (
-            <button
+    <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
+      <Tabs value={route.tab} onValueChange={(value) => onRoute({ ...route, tab: value as Tab })} className="min-w-0 flex-1">
+        <TabsList aria-label="Tinkerer sections" className="tk-chips h-8 w-full justify-start gap-0.5 rounded-none bg-transparent p-0 pb-0">
+          {TABS.map((tab) => (
+            <TabsTrigger
               key={tab.id}
-              type="button"
-              aria-current={active ? "page" : undefined}
-              onClick={() => onRoute({ ...route, tab: tab.id })}
-              className={cn(
-                "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors",
-                active ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-              )}
+              value={tab.id}
+              className="h-7 shrink-0 gap-1.5 rounded-md px-2.5 text-sm font-normal text-muted-foreground shadow-none data-[state=active]:bg-muted data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
               {tab.label}
-              {tab.id === "inbox" && unread > 0 ? <span className="tk-count">{unread > 99 ? "99+" : unread}</span> : null}
+              {tab.id === "inbox" ? <CountBadge count={unread} /> : null}
               {tab.id === "live" && status?.live ? <span className="tk-live-dot" aria-label="Live now" /> : null}
               {tab.id === "lockin" && status?.lockIn ? <span className="size-1.5 rounded-full" style={{ background: "var(--tk-spark)" }} aria-label="Lock-in running" /> : null}
-            </button>
-          );
-        })}
-      </nav>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       {right}
     </div>
   );
@@ -111,10 +105,12 @@ export function NewPostButton({ className }: { className?: string }) {
   const rpc = useRpc<typeof rpcContract>();
   return (
     <>
-      <Button size="sm" className={cn("h-7 gap-1.5", className)} onClick={() => setOpen(true)}>
-        <Glyph icon={Add01Icon} size={14} />
-        New post
-      </Button>
+      <Tip label="New post">
+        <Button size="sm" className={cn("tk-newpost h-7 gap-1.5", className)} onClick={() => setOpen(true)} aria-label="New post">
+          <Glyph icon={Add01Icon} size={14} />
+          <span className="tk-newpost-label">New post</span>
+        </Button>
+      </Tip>
       <Composer open={open} onOpenChange={setOpen} onPosted={() => invalidateStatus(rpc)} />
     </>
   );
@@ -122,8 +118,6 @@ export function NewPostButton({ className }: { className?: string }) {
 
 export function PanelBody({ route, threadId, className }: { route: PanelRoute; threadId?: string | null; className?: string }) {
   const { status, error } = useStatus();
-  const { values } = useSettings();
-  void values;
   if (status === null && error === null) return <div className="p-4 text-sm text-muted-foreground">Connecting…</div>;
   if (status === null || !status.keyPresent || (status.error && !status.connected)) return <ConnectState />;
   return (
@@ -145,12 +139,16 @@ function InboxHolder({ route }: { route: PanelRoute }) {
 /** The whole panel: strip + body. Used by the nav panel and the thread side panel. */
 export function TinkererPanel({ route, onRoute, threadId }: { route: PanelRoute; onRoute: (next: PanelRoute) => void; threadId?: string | null }) {
   const { status } = useStatus();
+  // On screen means live: the server polls faster while someone is looking.
+  useLiveRefresh();
   return (
-    <div className="tk-root flex h-full min-h-0 flex-col">
-      <TabStrip route={route} onRoute={onRoute} right={status?.connected ? <NewPostButton /> : null} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <PanelBody route={route} threadId={threadId} />
+    <TooltipProvider>
+      <div className="tk-root flex h-full min-h-0 flex-col">
+        <TabStrip route={route} onRoute={onRoute} right={status?.connected ? <NewPostButton /> : null} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <PanelBody route={route} threadId={threadId} />
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

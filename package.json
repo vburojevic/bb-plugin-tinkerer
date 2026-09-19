@@ -32,7 +32,10 @@
     "name": "Tinkerer",
     "description": "Tinkerer Club inside bb: timeline with trending topics, inbox with DMs and topic chats, lock-in sessions, your level, sparks and badges, a post composer, agent tools that post carefully, and a bb tinkerer CLI.",
     "branding": {
-      "icon": "./assets/icon.svg"
+      "icon": "./assets/icon.svg",
+      "experimental_icons": {
+        "mark": "./assets/icon.svg"
+      }
     },
     "server": "./server.ts",
     "app": "./app.tsx"

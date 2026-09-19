@@ -4,8 +4,10 @@ import { useCallback } from "react";
 import { useBbNavigate, useRealtime } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { REALTIME_CHANNEL, type RealtimeSignal } from "../lib/contract";
+import { CountBadge } from "./shared";
 import { PANEL_PATH } from "./Panel";
 import { useStatus } from "./store";
+import { useThemeAccent } from "./theme";
 
 export function UnreadAccessory() {
   const { status } = useStatus();
@@ -15,16 +17,14 @@ export function UnreadAccessory() {
     return (
       <span className="tk-root inline-flex items-center gap-1.5">
         <span className="tk-live-dot" aria-label="Live now" />
-        {total > 0 ? <span className="tk-count">{total > 99 ? "99+" : total}</span> : null}
+        <CountBadge count={total} />
       </span>
     );
   }
   if (total === 0) return null;
   return (
     <span className="tk-root">
-      <span className="tk-count" aria-label={`${total} unread`}>
-        {total > 99 ? "99+" : total}
-      </span>
+      <CountBadge count={total} />
     </span>
   );
 }
@@ -32,6 +32,7 @@ export function UnreadAccessory() {
 /** Mounted once per window; the only place server toasts become host toasts. */
 export function ToastBridge() {
   const navigate = useBbNavigate();
+  useThemeAccent();
   useRealtime(
     REALTIME_CHANNEL,
     useCallback(

@@ -65,3 +65,16 @@ contract v0.1 is built against; docs/ROADMAP.md holds everything deferred.
 - CLI `bb tinkerer`: status, me, notifs, timeline, post, search, lockin.
 - README with light and dark screenshots, PLUGIN_OVERVIEW.md, vitest smoke
   test, typecheck clean, installed from path and running.
+
+## Polish pass (2026-09-19, same day)
+
+Asked for after the first live review: post images and videos (through a
+same-origin media proxy, since the platform needs the key), polls with voting,
+folded articles, working topic and hashtag filters (`post/byTopic`,
+`post/byHashtag`; trending hashtags are not topics), a composer with no project
+picker, a growing text field, topic suggestions, a count ring and a kept
+draft, container-query layouts for the side panel and phones, live updates
+(every poll reports change scopes; open views refetch; 20 s cadence while the
+panel is visible), a theme-derived accent with a Tinkerer-green fallback,
+shadcn Tabs, Badge, Tooltip, Card, Progress, Textarea and Separator throughout,
+and the club's gear-and-wrench mark as the plugin icon.

@@ -35,10 +35,12 @@ reaches the browser, an agent, or a log.
 
 ## Timeline
 
-Post cards carry the author, link previews, images, reactions, like, bookmark,
-and inline comments with a reply box. The chips above the feed are the week's
-trending hashtags; tap one to read that topic, tap again to come back. Every
-card has an *Open* link to the post on the web.
+Post cards carry the author, images and video, link previews, polls you can
+vote in, reactions, like, bookmark, and inline comments with a reply box. Long
+articles fold behind *Show more*. The row above the feed filters it: pick any
+topic from a searchable list sorted by activity, or tap one of the week's
+trending hashtags; tap again to come back. New posts slide in at the top as
+they arrive. Every card has an *Open* link to the post on the web.
 
 ## Inbox
 
@@ -84,11 +86,12 @@ the task they are on and tick todos as they finish.
   <img alt="The New post dialog with a link preview, topic picker, project select and Publish button" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/composer.png">
 </picture>
 
-Content, a searchable topic picker, your projects, and a link preview the
-composer finds on its own from the first URL you type. **Publish** is the
-primary action; **Queue** hands the post to your Tinkerer post queue instead.
-The "show on the timeline" toggle follows a plugin setting. Short posts only;
-articles stay on the web.
+Just the post: a text field that grows with what you write, a link preview
+the composer finds on its own from the first URL, topic chips with a
+searchable picker and suggestions pulled from the words you typed, a count
+ring, and the visibility switch. **Publish** is the primary action (⌘↵);
+**Queue** hands the post to your Tinkerer post queue instead. Close the dialog
+and the draft waits for you. Short posts only; articles stay on the web.
 
 ## The footer menu
 
@@ -148,15 +151,28 @@ bb tinkerer lockin finish
 | Confirm before an agent posts | on | `tinkerer_post` opens an approval card in the thread. |
 | Allow agent writes via `tinkerer_call` | off | Lets the generic tool run write procedures. |
 
-## How it talks to Tinkerer Club
+## Live, without webhooks
 
 Every call is `POST https://app.tinkerer.club/api/v1/<namespace>/<procedure>`
 with your key in `x-api-key`. There are no webhooks, so a background service
-polls the unread counts and the live banner at the interval you set, backing
-off exponentially on errors and not at all without a key. Reads sit behind a
-small in-memory cache. Admin-only procedures are never exposed. The procedure
-catalog in `lib/procedures.generated.ts` comes from the platform's OpenAPI
-document (`npm run gen:procedures`).
+polls the unread counts, the newest post, the live banner and your lock-in at
+the interval you set, backing off exponentially on errors and not at all
+without a key. While the panel is on screen it polls every 20 seconds, and
+each poll tells the open views exactly what moved: the timeline merges new
+posts, the inbox lists refresh, an open conversation pulls new messages and
+marks them read. Post images and videos need the key too, so they load through
+a small same-origin proxy route. Reads sit behind an in-memory cache.
+Admin-only procedures are never exposed. The procedure catalog in
+`lib/procedures.generated.ts` comes from the platform's OpenAPI document
+(`npm run gen:procedures`).
+
+## Looks like your bb
+
+Everything is drawn with bb's own tokens and vendored shadcn components. The
+one accent follows your theme: when the palette's primary colour is chromatic
+(ayu gold, dracula purple) the sparks, progress bar, unread pills and lock-in
+clock take it; on a neutral theme they fall back to Tinkerer Club green. The
+plugin mark is the club's gear and wrench.
 
 ## Roadmap
 

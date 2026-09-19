@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../server";
-import { REALTIME_CHANNEL, type RealtimeSignal, type Status } from "../lib/contract";
+import { REALTIME_CHANNEL, type ChangeScope, type RealtimeSignal, type Status } from "../lib/contract";
 
 type Rpc = ReturnType<typeof useRpc<typeof rpcContract>>;
 
@@ -69,4 +69,48 @@ export function useStatus(): StatusView {
 /** Tell every subscriber to re-read (after a local mutation the server also announces). */
 export function invalidateStatus(rpc: Rpc): void {
   void load(rpc);
+}
+
+/** Run `handler` whenever a poll reports fresh data in one of `scopes`. */
+export function useChanges(scopes: ChangeScope[], handler: () => void): void {
+  const key = scopes.join(",");
+  useRealtime(
+    REALTIME_CHANNEL,
+    useCallback(
+      (payload: unknown) => {
+        const signal = payload as RealtimeSignal | null;
+        if (signal?.kind !== "changed") return;
+        if (signal.scopes.some((scope) => scopes.includes(scope))) handler();
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [key, handler],
+    ),
+  );
+}
+
+/**
+ * While the panel is on screen, ask the server to poll more often than its
+ * background interval. The server shares one in-flight poll, so several open
+ * panels cost one request per tick; a hidden tab costs nothing.
+ */
+export function useLiveRefresh(everyMs = 20_000): void {
+  const rpc = useRpc<typeof rpcContract>();
+  useEffect(() => {
+    let timer: number | null = null;
+    const tick = () => {
+      if (document.visibilityState === "visible") void load(rpc, "refresh");
+    };
+    const start = () => {
+      if (timer === null) timer = window.setInterval(tick, everyMs);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      if (timer !== null) window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [rpc, everyMs]);
 }

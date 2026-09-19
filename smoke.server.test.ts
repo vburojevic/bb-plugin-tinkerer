@@ -29,6 +29,7 @@ function platform(overrides: Record<string, Route> = {}) {
     "user/getCurrentUser": () => me,
     "notification/unreadCount": () => 2,
     "messaging/dmUnreadCount": () => 1,
+    "messaging/unreadCount": () => 1,
     "topicChat/activeTopics": () => [{ slug: "codex", name: "Codex", unreadMentionCount: 1 }],
     "event/liveBanner": () => null,
     "lockIn/state": () => ({ current: null, participants: [], serverNow: "2026-09-19T10:00:00.000Z" }),

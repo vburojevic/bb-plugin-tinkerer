@@ -7,7 +7,7 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { buildCli } from "./lib/cli";
-import { createTinkererClient } from "./lib/client";
+import { TINKERER_BASE_URL, createTinkererClient } from "./lib/client";
 import {
   REALTIME_CHANNEL,
   rpcContract,
@@ -191,15 +191,50 @@ export default async function plugin(bb: BbPluginApi) {
     return result.outcome === "submitted" && typeof result.value === "object" && result.value !== null && (result.value as { approved?: unknown }).approved === true;
   }
 
+  /** Topics with their post counts, busiest first; the composer and the feed filter share it. */
+  async function topicsWithCounts(): Promise<Topic[]> {
+    const rows = await client.call<Array<Topic & { _count?: { posts?: number } }>>("topic/listWithStats", {}, { ttlMs: TTL_LONG });
+    return rows
+      .map((row) => ({ id: row.id, slug: row.slug, name: row.name, emoji: row.emoji ?? null, kind: row.kind, posts: row._count?.posts ?? 0 }))
+      .sort((a, b) => b.posts - a.posts || a.name.localeCompare(b.name));
+  }
+
+  // ---- media proxy -----------------------------------------------------------
+  // Post images and videos need the key (the platform answers 401 without it),
+  // so the browser fetches them through this route. Same-origin, GET only, the
+  // path is constrained to the media namespace, and Range passes through so
+  // videos can seek.
+  const MEDIA_PATH = /^\/api\/media\/[A-Za-z0-9/_.\-%]+$/;
+  bb.http.route("GET", "/media", async (c) => {
+    const p = c.req.query("p") ?? "";
+    if (!MEDIA_PATH.test(p) || p.includes("..")) return c.text("Not a media path", 400);
+    const key = current.apiKey ?? "";
+    if (key.length === 0) return c.text("No Tinkerer Club API key configured", 401);
+    const range = c.req.header("range");
+    const upstream = await fetch(`${TINKERER_BASE_URL}${p}`, { headers: { "x-api-key": key, ...(range ? { range } : {}) } });
+    const headers = new Headers();
+    for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {
+      const value = upstream.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    headers.set("cache-control", "private, max-age=86400");
+    headers.set("x-content-type-options", "nosniff");
+    return new Response(upstream.body, { status: upstream.status, headers });
+  });
+
   // ---- RPC ------------------------------------------------------------------
 
   bb.rpc.register(rpcContract, {
     status: () => service.status(),
     refresh: () => service.refresh(),
-    async timeline({ cursor, topic }) {
-      const page = topic
-        ? await client.call<{ items: Post[]; nextCursor?: string | null }>("topic/feed", { slug: topic, includeChildren: true, limit: 20, ...(cursor ? { cursor } : {}) }, { ttlMs: TTL_SHORT })
-        : await client.call<{ items: Post[]; nextCursor?: string | null }>("post/timeline", { limit: 20, supportsSparsePages: true, ...(cursor ? { cursor } : {}) }, { ttlMs: TTL_SHORT });
+    async timeline({ cursor, hashtag, topic }) {
+      type Page = { items: Post[]; nextCursor?: string | null };
+      const paging = { limit: 20, ...(cursor ? { cursor } : {}) };
+      const page = hashtag
+        ? await client.call<Page>("post/byHashtag", { slug: hashtag, ...paging }, { ttlMs: TTL_SHORT })
+        : topic
+          ? await client.call<Page>("post/byTopic", { slug: topic, ...paging }, { ttlMs: TTL_SHORT })
+          : await client.call<Page>("post/timeline", { ...paging, supportsSparsePages: true }, { ttlMs: TTL_SHORT });
       return { items: page.items, nextCursor: page.nextCursor ?? null };
     },
     trending: () => client.call<Array<{ slug: string; postCount: number }>>("post/trendingHashtags", { days: 7, limit: 12 }, { ttlMs: TTL_LONG }),
@@ -220,6 +255,11 @@ export default async function plugin(bb: BbPluginApi) {
     },
     async bookmark({ postId }) {
       await client.call("post/toggleBookmark", { postId });
+      client.invalidate("post/");
+      return client.call<Post>("post/byId", { id: postId });
+    },
+    async votePoll({ postId, optionId }) {
+      await client.call("post/votePoll", { postId, optionId });
       client.invalidate("post/");
       return client.call<Post>("post/byId", { id: postId });
     },
@@ -301,12 +341,10 @@ export default async function plugin(bb: BbPluginApi) {
       return { banner: banner ?? null, upcoming };
     },
     async composerData() {
-      const [topics, projects] = await Promise.all([
-        client.call<Topic[]>("topic/list", {}, { ttlMs: TTL_LONG }),
-        client.call<Project[]>("project/myProjects", {}, { ttlMs: TTL_LONG }),
-      ]);
+      const [topics, projects] = await Promise.all([topicsWithCounts(), client.call<Project[]>("project/myProjects", {}, { ttlMs: TTL_LONG })]);
       return { topics, projects };
     },
+    topics: () => topicsWithCounts(),
     previewLink: ({ url }) => client.call<LinkPreview | null>("post/previewLink", { url }, { ttlMs: TTL_LONG }),
     createPost: (draft) => createPost(draft),
     async threadTitle({ threadId }) {

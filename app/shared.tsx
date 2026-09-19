@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { Author } from "../lib/contract";
@@ -130,4 +132,28 @@ export function useNow(intervalMs = 1000): number {
     return () => window.clearInterval(timer);
   }, [intervalMs]);
   return now;
+}
+
+// ---- shadcn-backed helpers ------------------------------------------------
+
+/** The unread pill: a Badge in the spark tone. */
+export function CountBadge({ count, label, className }: { count: number; label?: string; className?: string }) {
+  if (count <= 0) return null;
+  return (
+    <Badge variant="default" className={cn("tk-count border-0 px-1.5 py-0 font-semibold", className)} aria-label={label ?? `${count} unread`}>
+      {count > 99 ? "99+" : count}
+    </Badge>
+  );
+}
+
+/** Wrap any control with a short tooltip; icon-only buttons always get one. */
+export function Tip({ label, children, side = "bottom" }: { label: string; children: ReactNode; side?: "top" | "bottom" | "left" | "right" }) {
+  return (
+    <Tooltip delayDuration={350}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side} className="text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
 }

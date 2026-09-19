@@ -6,6 +6,7 @@ import { UrlLink, useRpc } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { ArrowLeft01Icon, SentIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
@@ -13,31 +14,23 @@ import type { Author, Conversation, Notification, TopicChat } from "../lib/contr
 import { TINKERER_BASE_URL } from "../lib/client";
 import { displayName, excerpt, relativeTime } from "../lib/format";
 import { Linkified } from "./PostCard";
-import { EmptyState, ErrorState, Glyph, ListSkeleton, UserAvatar, useAsync } from "./shared";
-import { invalidateStatus, useStatus } from "./store";
+import { CountBadge, EmptyState, ErrorState, Glyph, ListSkeleton, Tip, UserAvatar, useAsync } from "./shared";
+import { invalidateStatus, useChanges, useStatus } from "./store";
 
 export type InboxTab = "notifications" | "dms" | "topics";
 
-export function Segmented<T extends string>({ value, onChange, items }: { value: T; onChange: (next: T) => void; items: Array<{ id: T; label: string; count?: number }> }) {
+export function Segmented<T extends string>({ value, onChange, items, label }: { value: T; onChange: (next: T) => void; items: Array<{ id: T; label: string; count?: number | null }>; label?: string }) {
   return (
-    <div role="tablist" className="inline-flex h-8 items-center gap-0.5 rounded-md border border-border p-0.5">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          role="tab"
-          type="button"
-          aria-selected={value === item.id}
-          onClick={() => onChange(item.id)}
-          className={cn(
-            "inline-flex h-full items-center gap-1.5 rounded px-2.5 text-xs font-medium transition-colors",
-            value === item.id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {item.label}
-          {item.count ? <span className="tk-count">{item.count}</span> : null}
-        </button>
-      ))}
-    </div>
+    <Tabs value={value} onValueChange={(next) => onChange(next as T)}>
+      <TabsList aria-label={label} className="h-8 gap-0.5 rounded-md border border-border bg-transparent p-0.5">
+        {items.map((item) => (
+          <TabsTrigger key={item.id} value={item.id} className="h-full gap-1.5 rounded px-2.5 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none">
+            {item.label}
+            <CountBadge count={item.count ?? 0} />
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 
@@ -73,6 +66,7 @@ function NotificationRow({ item, onRead }: { item: Notification; onRead: (id: st
 function Notifications() {
   const rpc = useRpc<typeof rpcContract>();
   const list = useAsync(() => rpc.call("notifications", {}), [rpc]);
+  useChanges(["notifications"], list.reload);
   const [more, setMore] = useState(false);
   const unread = list.data?.items.filter((n) => !n.read).length ?? 0;
 
@@ -165,9 +159,11 @@ function ReplyBox({ placeholder, onSend }: { placeholder: string; onSend: (conte
           }
         }}
       />
-      <Button type="submit" size="sm" variant="outline" disabled={sending || draft.trim().length === 0} aria-label="Send">
-        <Glyph icon={SentIcon} size={15} />
-      </Button>
+      <Tip label="Send (Enter)">
+        <Button type="submit" size="sm" variant="outline" disabled={sending || draft.trim().length === 0} aria-label="Send">
+          <Glyph icon={SentIcon} size={15} />
+        </Button>
+      </Tip>
     </form>
   );
 }
@@ -199,16 +195,23 @@ function ConversationView({ conversation, onBack }: { conversation: Conversation
   const rpc = useRpc<typeof rpcContract>();
   const { status } = useStatus();
   const thread = useAsync(() => rpc.call("messages", { conversationId: conversation.id }), [rpc, conversation.id]);
+  const [readTick, setReadTick] = useState(0);
+  useChanges(["messages"], () => {
+    thread.reload();
+    setReadTick((n) => n + 1);
+  });
   useEffect(() => {
     void rpc.call("markConversationRead", { conversationId: conversation.id }).then(() => invalidateStatus(rpc)).catch(() => {});
-  }, [rpc, conversation.id]);
+  }, [rpc, conversation.id, readTick]);
   const title = conversation.name ?? displayName(conversation.otherUser);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 pb-2">
-        <Button variant="ghost" size="icon" className="size-7" onClick={onBack} aria-label="Back to conversations">
-          <Glyph icon={ArrowLeft01Icon} />
-        </Button>
+        <Tip label="Back">
+          <Button variant="ghost" size="icon" className="size-7" onClick={onBack} aria-label="Back to conversations">
+            <Glyph icon={ArrowLeft01Icon} />
+          </Button>
+        </Tip>
         <UserAvatar author={conversation.otherUser} className="size-6" />
         <span className="text-sm font-medium">{title}</span>
       </div>
@@ -234,6 +237,7 @@ function ConversationView({ conversation, onBack }: { conversation: Conversation
 function Conversations() {
   const rpc = useRpc<typeof rpcContract>();
   const list = useAsync(() => rpc.call("conversations"), [rpc]);
+  useChanges(["messages"], list.reload);
   const [open, setOpen] = useState<Conversation | null>(null);
   if (open) return <ConversationView conversation={open} onBack={() => { setOpen(null); list.reload(); }} />;
   if (list.error) return <ErrorState message={list.error} onRetry={list.reload} />;
@@ -254,7 +258,7 @@ function Conversations() {
                 </div>
                 <p className={cn("truncate text-xs", unread > 0 ? "text-foreground" : "text-muted-foreground")}>{excerpt(c.lastMessage?.content, 90) || "No messages yet"}</p>
               </div>
-              {unread > 0 ? <span className="tk-count">{unread}</span> : null}
+              <CountBadge count={unread} />
             </button>
           </li>
         );
@@ -267,15 +271,22 @@ function TopicView({ topic, onBack }: { topic: TopicChat; onBack: () => void }) 
   const rpc = useRpc<typeof rpcContract>();
   const { status } = useStatus();
   const thread = useAsync(() => rpc.call("topicMessages", { slug: topic.slug }), [rpc, topic.slug]);
+  const [readTick, setReadTick] = useState(0);
+  useChanges(["topics"], () => {
+    thread.reload();
+    setReadTick((n) => n + 1);
+  });
   useEffect(() => {
     void rpc.call("markTopicRead", { slug: topic.slug }).then(() => invalidateStatus(rpc)).catch(() => {});
-  }, [rpc, topic.slug]);
+  }, [rpc, topic.slug, readTick]);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 pb-2">
-        <Button variant="ghost" size="icon" className="size-7" onClick={onBack} aria-label="Back to topics">
-          <Glyph icon={ArrowLeft01Icon} />
-        </Button>
+        <Tip label="Back">
+          <Button variant="ghost" size="icon" className="size-7" onClick={onBack} aria-label="Back to topics">
+            <Glyph icon={ArrowLeft01Icon} />
+          </Button>
+        </Tip>
         <span className="text-sm font-medium">
           {topic.emoji ? `${topic.emoji} ` : ""}
           {topic.name}
@@ -304,6 +315,7 @@ function TopicView({ topic, onBack }: { topic: TopicChat; onBack: () => void }) 
 function Topics() {
   const rpc = useRpc<typeof rpcContract>();
   const list = useAsync(() => rpc.call("topicChats"), [rpc]);
+  useChanges(["topics"], list.reload);
   const [open, setOpen] = useState<TopicChat | null>(null);
   if (open) return <TopicView topic={open} onBack={() => { setOpen(null); list.reload(); }} />;
   if (list.error) return <ErrorState message={list.error} onRetry={list.reload} />;
@@ -325,7 +337,7 @@ function Topics() {
               </div>
               <p className="truncate text-xs text-muted-foreground">{excerpt(t.lastMessage?.content, 90) || `${t.messageCount ?? 0} messages`}</p>
             </div>
-            {t.unreadMentionCount ? <span className="tk-count" title="Unread mentions">{t.unreadMentionCount}</span> : null}
+            <CountBadge count={t.unreadMentionCount ?? 0} label={`${t.unreadMentionCount} unread mentions`} />
           </button>
         </li>
       ))}
@@ -338,6 +350,7 @@ export function Inbox({ tab, onTab, className }: { tab: InboxTab; onTab: (next: 
   return (
     <div className={cn("flex h-full min-h-0 flex-col gap-3", className)}>
       <Segmented
+        label="Inbox sections"
         value={tab}
         onChange={onTab}
         items={[

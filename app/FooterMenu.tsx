@@ -7,13 +7,14 @@ import { toast } from "sonner";
 import { Add01Icon, InboxIcon, Timer01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import { countdown } from "../lib/format";
 import { Composer } from "./Composer";
 import { isLiveNow, liveUrl } from "./Live";
 import { PANEL_PATH } from "./Panel";
-import { Glyph, useNow } from "./shared";
+import { CountBadge, Glyph, useNow } from "./shared";
 import { invalidateStatus, useStatus } from "./store";
 
 function Row({ children, onClick, className }: { children: React.ReactNode; onClick?: () => void; className?: string }) {
@@ -91,6 +92,7 @@ export function FooterMenu({ dismiss }: { dismiss: () => void }) {
   ].filter((b) => b.count > 0);
 
   return (
+    <TooltipProvider>
     <div className="tk-root w-72 space-y-0.5 p-1.5">
       <Row onClick={() => setCompose(true)}>
         <Glyph icon={Add01Icon} className="text-muted-foreground" />
@@ -138,7 +140,7 @@ export function FooterMenu({ dismiss }: { dismiss: () => void }) {
               <Glyph icon={InboxIcon} className="text-muted-foreground" />
               {bucket.count} unread {bucket.label}
             </span>
-            <span className="tk-count">{bucket.count}</span>
+            <CountBadge count={bucket.count} />
           </Row>
         ))
       )}
@@ -168,5 +170,6 @@ export function FooterMenu({ dismiss }: { dismiss: () => void }) {
         onPosted={() => invalidateStatus(rpc)}
       />
     </div>
+    </TooltipProvider>
   );
 }

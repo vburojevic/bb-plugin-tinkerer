@@ -13,10 +13,17 @@
  */
 .tk-root,
 .tk-scope {
-  --tk-spark: light-dark(oklch(0.62 0.16 62), oklch(0.8 0.14 72));
-  --tk-spark-soft: light-dark(oklch(0.965 0.035 78), oklch(0.29 0.04 65));
-  --tk-spark-line: light-dark(oklch(0.86 0.09 72), oklch(0.42 0.07 68));
-  --tk-live: light-dark(oklch(0.56 0.2 27), oklch(0.72 0.18 27));
+  /*
+   * The accent follows the user's theme when that theme has a chromatic
+   * --primary (ayu gold, dracula purple, …): app/theme.ts measures it and
+   * sets --tk-accent on the root. Neutral themes (bb default) leave it unset,
+   * and the fallback is Tinkerer Club's own green, tuned per scheme.
+   */
+  --tk-brand: light-dark(oklch(0.55 0.17 145), oklch(0.82 0.21 145));
+  --tk-spark: var(--tk-accent, var(--tk-brand));
+  --tk-spark-soft: color-mix(in oklab, var(--tk-spark) 14%, var(--card));
+  --tk-spark-line: color-mix(in oklab, var(--tk-spark) 45%, var(--border));
+  --tk-live: var(--destructive, light-dark(oklch(0.56 0.2 27), oklch(0.72 0.18 27)));
 }
 
 .tk-spark-text { color: var(--tk-spark); }
@@ -36,6 +43,9 @@
   background: var(--tk-spark);
   transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* shadcn Progress, filled in the accent instead of --primary. */
+.tk-progress > div { background: var(--tk-spark); }
 
 /* The live dot: a slow breath, the panel's only unprompted motion. */
 .tk-live-dot {
@@ -97,3 +107,78 @@
   overflow-wrap: anywhere;
 }
 .tk-prose a { text-decoration: underline; text-underline-offset: 2px; }
+
+/*
+ * Width adaptation. The panel lives in three widths: the full nav page, the
+ * thread side panel, and a phone. Container queries follow the panel's own
+ * width, which is what matters; the viewport is not.
+ */
+.tk-root {
+  container-type: inline-size;
+  container-name: tk;
+}
+@container tk (max-width: 560px) {
+  .tk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tk-stats > :last-child { grid-column: span 2; }
+  .tk-badges { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tk-newpost-label { display: none; }
+  .tk-newpost { padding-inline: 0.5rem; }
+}
+@container tk (min-width: 561px) {
+  .tk-badges { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* Chip rows scroll sideways; the fade says so without a scrollbar. */
+.tk-chips {
+  display: flex;
+  gap: 0.375rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+  mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+}
+.tk-chips::-webkit-scrollbar { display: none; }
+
+/* Long posts fold; the fade under the fold says there is more. */
+.tk-fold {
+  position: relative;
+  max-height: 22rem;
+  overflow: hidden;
+}
+.tk-fold::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 4rem;
+  background: linear-gradient(to bottom, transparent, var(--card));
+}
+
+/* Poll bars: one sequential fill, the reader's own pick in the spark tone. */
+.tk-poll-bar {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+.tk-poll-bar > .tk-poll-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--muted);
+  transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tk-poll-bar[data-mine="true"] > .tk-poll-fill { background: var(--tk-spark-soft); }
+.tk-poll-bar[data-mine="true"] { border-color: var(--tk-spark-line); }
+
+/* Composer character ring. */
+.tk-ring { transform: rotate(-90deg); }
+.tk-ring .tk-ring-track { stroke: var(--border); }
+.tk-ring .tk-ring-fill { stroke: var(--tk-spark); transition: stroke-dashoffset 120ms linear; }
+.tk-ring[data-over="true"] .tk-ring-fill { stroke: var(--destructive); }
+
+/* Composer textarea grows with the draft; no inner scrollbar until it is tall. */
+.tk-grow {
+  field-sizing: content;
+  min-height: 7.5rem;
+  max-height: 24rem;
+}
