@@ -265,7 +265,7 @@ export default async function plugin(bb: BbPluginApi) {
         client.call<UserStats>("leaderboard/userStats", { userId: user.id, includeRank: true }, { ttlMs: TTL_SHORT }),
         client.call<{ balance: number }>("shop/wallet", {}, { ttlMs: TTL_SHORT }),
         client.call<{ badges: Badge[] }>("gamification/collection", { userId: user.id }, { ttlMs: TTL_LONG }),
-        client.call<{ rows: Array<{ commits: number; rank: number; user: { id: string } }> }>("leaderboard/githubCommits", { period: "week", limit: 100, offset: 0 }, { ttlMs: TTL_LONG }),
+        client.call<{ rows: Array<{ commits: number; rank: number; user: { id: string } }> }>("leaderboard/githubCommits", { period: "week", limit: 50, offset: 0 }, { ttlMs: TTL_LONG }),
         client.call<{ rows: LedgerRow[] }>("shop/ledger", {}, { ttlMs: TTL_SHORT }),
       ]);
       const mine = commits.rows.find((row) => row.user.id === user.id);

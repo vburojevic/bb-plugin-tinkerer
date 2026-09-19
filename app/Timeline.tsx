@@ -12,7 +12,8 @@ import { EmptyState, ErrorState, ListSkeleton, useAsync } from "./shared";
 export function TopicChips({ active, onPick }: { active: string | null; onPick: (slug: string | null) => void }) {
   const rpc = useRpc<typeof rpcContract>();
   const trending = useAsync(() => rpc.call("trending"), [rpc]);
-  const chips = (trending.data ?? []).filter((row) => row.postCount > 0).slice(0, 10);
+  // Numeric "hashtags" are list markers the platform picked up ("1." → #1); not topics.
+  const chips = (trending.data ?? []).filter((row) => row.postCount > 0 && !/^\d+$/.test(row.slug)).slice(0, 10);
   if (!trending.loading && chips.length === 0 && active === null) return null;
   return (
     <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]" role="group" aria-label="Trending topics">

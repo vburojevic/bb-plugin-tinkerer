@@ -1,141 +1,180 @@
-# bb-plugin-tinkerer
+<div align="center">
 
-A BB plugin that keeps a todo list. It shows every surface a plugin can own:
+# Tinkerer
 
-- `server.ts` — the backend: a todo store in `bb.storage.kv`, RPC methods
-  for the page, a `bb tinkerer` CLI command, a setting, and a realtime signal
-  that keeps every open page current.
-- `app.tsx` — the frontend: an **Example todos** page in the left sidebar
-  (`app.slots.navPanel`) built from the vendored components.
-- `skills/example-todos/SKILL.md` — a skill that tells agents how to keep the list
-  with `bb tinkerer`. BB imports it into agent threads automatically.
-- `PLUGIN_OVERVIEW.md` — the store listing text: a longer version of
-  `bb.description` that the plugin detail page shows under it. See
-  [Store listing](#store-listing).
+**Tinkerer Club, inside bb.**
 
-Try it: install the plugin, open **Example todos** in the sidebar, then run
-`bb tinkerer add "Ship it"` in a terminal. The page updates at once.
+The club timeline, your inbox, lock-in sessions, your level and sparks, and a
+post composer, one sidebar entry away from the agent you are working with.
+Agents get tools that read freely and post carefully.
 
-## UI components
+</div>
 
-`components/ui/` is vendored source you own (the shadcn model): edit the
-files freely — they never update out from under you. Add more from the BB
-component registry (the full shadcn set, version-matched to your BB install
-via the pinned ref in `components.json`):
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/timeline.png">
+  <img alt="The Tinkerer panel on the Timeline tab with trending topic chips and a post card" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/timeline.png">
+</picture>
 
-```
-npx shadcn add @bb/select @bb/table
-```
-
-Run `npm install` once before `bb plugin build` — the vendored components'
-npm deps bundle into your dist. React, and BB-shimmed packages like the
-radix portal primitives and `sonner` (`import { toast } from "sonner"`
-reaches BB's own toaster), are provided by the BB app at runtime and never
-bundled. Every shimmed package is declared in `devDependencies` at the
-host's version so those imports typecheck; keep them there (never in
-`dependencies`, which would bundle a second copy), and `bb plugin types`
-repins them alongside the SDK. Ship `dist/` (npm tarball or committed for
-git installs) so people installing your plugin never need npm.
-
-## Manifest
-
-`package.json` is the plugin manifest. Notable fields:
-
-- `bb.server` — backend entry (required).
-- `bb.app` — frontend entry. Delete it, `app.tsx`, `components/`,
-  `hooks/`, and `lib/` for a headless plugin.
-- `bb.skills` — skill roots; omitted here, so BB reads `skills/`. Each
-  directory with a `SKILL.md` is one skill, named after the directory.
-- `bb.name` and `bb.description` — required human-facing identity.
-- `bb.branding` — required; declare `icon` as a BB icon name or a
-  plugin-relative compact SVG, or declare `logo.light` (with optional
-  `logo.dark`). Logo assets must be relative `.svg`, `.png`, or
-  `.webp` files.
-- `engines.bb` — supported bb app version range.
-- `engines.bbPluginSdk` — the lowest plugin SDK you need (scaffold:
-  `>=0.4.104`). BB reads this as a floor, not a ceiling: a later
-  SDK in the same major still loads your plugin.
-- `dependencies` — every package your source imports that BB does not provide.
-  `bb plugin build` inlines them into `dist/`, and git installs resolve this
-  list alone, so a build-required package here rather than in
-  `devDependencies` is what keeps your plugin installable. `devDependencies`
-  is for types and tooling only (BB shims React, the portal primitives, and
-  `@get-bb/plugin-sdk` at runtime — never bundle them).
-
-Run `bb plugin build` before publishing git/npm installs. It writes
-`dist/server.js` + `server.meta.json` and `app.js` / `app.css` /
-`app.meta.json`. Each `*.meta.json` stamps SDK major/version,
-`artifactFormatVersion`, `pluginId`, `pluginVersion`, and
-`builtWith` so managed installs can verify the artifacts.
-
-## Store listing
-
-Two texts describe the plugin in the store. `bb.description` in package.json
-is the one-sentence hook on every browse card and the lead paragraph on the
-detail page; keep it under about 140 characters. `PLUGIN_OVERVIEW.md` is the
-same claim at length, shown in an Overview section under that paragraph.
-Rewrite the scaffold's copy for your plugin, and update it whenever
-`bb.description` changes, so the two never disagree.
-
-The submission to the public BB Community marketplace requires the file. Keep
-it under 4000 characters (aim for 700 to 1800) and use headings, paragraphs,
-emphasis, code, blockquotes, lists, thematic breaks, and absolute https links
-only — raw HTML, images, tables, footnotes, and task lists are rejected. Do
-not open with a `#` title or repeat `bb.description` verbatim; the page
-shows both directly above.
+*The timeline, with the club's trending topics as chips.*
 
 ## Install
 
-From this directory (`bb plugin new` already ran the install; a fresh clone
-needs it):
+From the bb plugin catalog — open **Extensions**, search for **Tinkerer**, install.
 
+Or from a shell:
+
+```sh
+bb plugin install git:https://github.com/vburojevic/bb-plugin-tinkerer
 ```
+
+Requires bb 0.43 or newer and a Tinkerer Club membership. Bring your own key:
+create one at [app.tinkerer.club](https://app.tinkerer.club) under
+Settings → API keys, paste it into the plugin's settings, and the panel connects
+on its own. The key is stored as a secret setting on this machine and never
+reaches the browser, an agent, or a log.
+
+## Timeline
+
+Post cards carry the author, link previews, images, reactions, like, bookmark,
+and inline comments with a reply box. The chips above the feed are the week's
+trending hashtags; tap one to read that topic, tap again to come back. Every
+card has an *Open* link to the post on the web.
+
+## Inbox
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/inbox.png">
+  <img alt="The Inbox tab showing notifications with a segmented control for Messages and Topics" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/inbox.png">
+</picture>
+
+Notifications, direct messages, and the topic chats you follow, under one
+segmented control. Notifications mark themselves read as you act on them.
+Messages and topic chats open in place with a reply box, so answering someone
+never means leaving bb. The sidebar row wears an unread count, and a toast
+announces a new DM, a mention in a topic chat, or a broadcast going live.
+
+## Me
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/me.png">
+  <img alt="The Me tab with the level card, progress bar, stat tiles and the badge collection" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/me.png">
+</picture>
+
+Your level and the road to the next one, sparks earned in the last 30 days and
+all-time, your all-time rank, commits this week from the GitHub leaderboard,
+the badge collection, the recent sparks ledger, and the club leaderboard with a
+today / week / month switch.
+
+## Lock-in
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/lockin.png">
+  <img alt="The Lock-in tab with a title field and a Start lock-in button above a todo list" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/lockin.png">
+</picture>
+
+Start a lock-in named after what you are doing; when a thread is in view its
+title is prefilled. The countdown is the hero, todos sit under it, and members
+locked in alongside you appear at the bottom. Agents can start a session for
+the task they are on and tick todos as they finish.
+
+## Compose
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/composer.png">
+  <img alt="The New post dialog with a link preview, topic picker, project select and Publish button" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/composer.png">
+</picture>
+
+Content, a searchable topic picker, your projects, and a link preview the
+composer finds on its own from the first URL you type. **Publish** is the
+primary action; **Queue** hands the post to your Tinkerer post queue instead.
+The "show on the timeline" toggle follows a plugin setting. Short posts only;
+articles stay on the web.
+
+## The footer menu
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/footer.png">
+  <img alt="The sidebar footer disclosure with New post, a lock-in field, and the inbox summary" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/footer.png">
+</picture>
+
+A Tinkerer button in the sidebar footer opens a small menu: new post, start or
+finish a lock-in, the unread buckets, and a join link while a broadcast is live.
+The same panel also opens beside any thread from the side panel's actions.
+
+## Agents
+
+Seven tools, each described to the model as acting inside a real community:
+
+| Tool | Does |
+| --- | --- |
+| `tinkerer_me` | Level, sparks, progress, rank. |
+| `tinkerer_timeline` | Recent posts, or one topic's feed, with paging. |
+| `tinkerer_search` | Members, posts, articles, chats. |
+| `tinkerer_notifications` | Notifications, optionally marking them read. |
+| `tinkerer_post` | Preview first, then `confirm: true` to publish. |
+| `tinkerer_lockin` | Start, finish, and manage todos. |
+| `tinkerer_call` | Any platform procedure by name; reads always, writes only when you allow it. |
+
+With **Confirm before an agent posts** on (the default), the confirming call
+opens an approval card in the thread showing the exact post, and only your
+click publishes it. Agents cite a post in chat with
+`::tinkerer{post="<id>"}`, which renders as a live card in the transcript.
+The bundled `tinkerer-club` skill teaches agents the API shape, the header,
+the MCP endpoint, the polling rule, and the etiquette.
+
+## The command line
+
+```sh
+bb tinkerer status --refresh          # connection, unread counts, live, lock-in
+bb tinkerer me
+bb tinkerer notifs --unread
+bb tinkerer timeline --topic ai-llms --limit 5
+bb tinkerer post "Shipped the thing" --topic bb --queue
+bb tinkerer search "omarchy"
+bb tinkerer lockin start "Tinkerer plugin"
+bb tinkerer lockin add "Write the README" && bb tinkerer lockin done <id>
+bb tinkerer lockin finish
+```
+
+`--json` on any command, `--help` at every level.
+
+## Settings
+
+| Setting | Default | Does |
+| --- | --- | --- |
+| Tinkerer Club API key | — | Your personal key (`tnk_…`). Secret. |
+| Poll interval | 60 s | How often unread counts and the live banner are checked (30–600). |
+| New posts show on the timeline | on | Composer default for the timeline toggle. |
+| Confirm before an agent posts | on | `tinkerer_post` opens an approval card in the thread. |
+| Allow agent writes via `tinkerer_call` | off | Lets the generic tool run write procedures. |
+
+## How it talks to Tinkerer Club
+
+Every call is `POST https://app.tinkerer.club/api/v1/<namespace>/<procedure>`
+with your key in `x-api-key`. There are no webhooks, so a background service
+polls the unread counts and the live banner at the interval you set, backing
+off exponentially on errors and not at all without a key. Reads sit behind a
+small in-memory cache. Admin-only procedures are never exposed. The procedure
+catalog in `lib/procedures.generated.ts` comes from the platform's OpenAPI
+document (`npm run gen:procedures`).
+
+## Roadmap
+
+See [docs/ROADMAP.md](docs/ROADMAP.md): articles, queue management, sharing a
+thread to the club, AI-drafted posts, events RSVP, gifting, and more.
+
+## Development
+
+```sh
 npm install
-bb plugin install .
+npm run check          # typecheck + vitest
+bb plugin build
+bb plugin install path:$(pwd)
 ```
 
-After editing sources, reload:
+`docs/SPEC.md` is the v0.1 contract. `scripts/probe.mjs` calls a procedure with
+the key from `.env.local` without ever printing it.
 
-```
-bb plugin reload tinkerer
-```
+## License
 
-Or let `bb plugin dev` rebuild and reload on every save.
-
-## Configure
-
-```
-bb plugin config tinkerer
-bb plugin config tinkerer set showDone false
-bb plugin reload tinkerer
-```
-
-## Types & API reference
-
-The plugin API ships as the npm package `@get-bb/plugin-sdk`, pinned to an
-exact version in `devDependencies` (`0.4.104` — the SDK of the BB
-that scaffolded this plugin). After `npm install`, the full surface is on disk
-at:
-
-```
-node_modules/@get-bb/plugin-sdk/bundled-types/bb-plugin-sdk.d.ts      # backend
-node_modules/@get-bb/plugin-sdk/bundled-types/bb-plugin-sdk-app.d.ts  # frontend
-```
-
-Your editor and `tsc` resolve `@get-bb/plugin-sdk` there through ordinary node
-resolution — no path mapping. These are readable declarations: open them for an
-exact signature.
-
-The SDK surface grows with every BB release, so the pin has to track the BB you
-actually run:
-
-```
-bb plugin types          # sync this plugin's SDK surface to the running BB
-bb plugin types --check  # CI: fail when it does not match
-```
-
-Ask BB to write plugins for you: the `bb-plugin-authoring` skill documents
-the whole surface with examples.
-
-Confused by the API, or need something the types don't explain? Clone the BB
-repo and read the source: <https://github.com/get-bb/bb>.
+MIT © Vedran Burojević
