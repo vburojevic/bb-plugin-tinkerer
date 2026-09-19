@@ -1,0 +1,99 @@
+/*
+ * Tinkerer — plugin stylesheet.
+ *
+ * The panel wears the host's tokens (Tailwind utilities over bb's live CSS
+ * variables), so custom palettes keep working. This file holds the one thing
+ * utilities cannot express: the club's own colour, which is light-dark() so
+ * it is theme-aware without a `.dark` variant (this build has none).
+ *
+ * Two tones only, and each has one job:
+ *   --tk-spark   sparks, level progress, the unread count, the lock-in clock
+ *   --tk-live    the live-broadcast dot, and nothing else
+ * Everything else is ink on the host surface.
+ */
+.tk-root,
+.tk-scope {
+  --tk-spark: light-dark(oklch(0.62 0.16 62), oklch(0.8 0.14 72));
+  --tk-spark-soft: light-dark(oklch(0.965 0.035 78), oklch(0.29 0.04 65));
+  --tk-spark-line: light-dark(oklch(0.86 0.09 72), oklch(0.42 0.07 68));
+  --tk-live: light-dark(oklch(0.56 0.2 27), oklch(0.72 0.18 27));
+}
+
+.tk-spark-text { color: var(--tk-spark); }
+.tk-spark-soft { background: var(--tk-spark-soft); }
+.tk-spark-line { border-color: var(--tk-spark-line); }
+
+/* Level progress: one sequential fill in the spark tone on the host's muted track. */
+.tk-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+  overflow: hidden;
+}
+.tk-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tk-spark);
+  transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The live dot: a slow breath, the panel's only unprompted motion. */
+.tk-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--tk-live);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--tk-live) 45%, transparent);
+  animation: tk-breathe 2.4s ease-out infinite;
+}
+@keyframes tk-breathe {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tk-live) 45%, transparent); }
+  70% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--tk-live) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tk-live) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk-live-dot { animation: none; }
+  .tk-fill { transition: none; }
+}
+
+/* The unread pill in the sidebar row and on tab labels. */
+.tk-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--background);
+  background: var(--tk-spark);
+}
+
+/*
+ * The transcript card for ::tinkerer{post}. Same frame as bb's own prompt
+ * stack card (see bb-plugin-xcode app.css for the provenance): host border,
+ * raised surface, no margins — the timeline row's own gap spaces it.
+ */
+.tk-stack-card {
+  overflow: hidden;
+  border-radius: var(--radius-lg, 0.5rem);
+  border: 1px solid var(--border);
+  background: var(--surface-raised-solid, var(--card));
+}
+
+/* Lock-in clock: tabular so the digits do not jitter every second. */
+.tk-clock {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Post body: preserve the author's line breaks, wrap long URLs. */
+.tk-prose {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tk-prose a { text-decoration: underline; text-underline-offset: 2px; }

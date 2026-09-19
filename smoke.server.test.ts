@@ -65,7 +65,7 @@ describe("server smoke", () => {
     vi.unstubAllGlobals();
   });
 
-  async function boot(settings: Record<string, unknown> = {}, overrides: Record<string, Route> = {}) {
+  async function boot(settings: Record<string, string | number | boolean> = {}, overrides: Record<string, Route> = {}) {
     const { fetchImpl, calls } = platform(overrides);
     vi.stubGlobal("fetch", fetchImpl);
     const { bb, harness } = createFakePluginHost({ pluginId: "tinkerer", settings });

@@ -23,8 +23,10 @@
   "include": [
     "server.ts",
     "app.tsx",
+    "app",
     "components",
     "lib",
-    "hooks"
+    "hooks",
+    "smoke.server.test.ts"
   ]
 }
