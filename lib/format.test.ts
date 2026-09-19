@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countdown, excerpt, mediaUrl, postUrl, relativeTime } from "./format";
+import { countdown, dayLabel, excerpt, mediaUrl, postUrl, relativeTime } from "./format";
 
 describe("format", () => {
   it("absolutizes platform-relative media paths and leaves absolute URLs alone", () => {
@@ -25,5 +25,16 @@ describe("format", () => {
   it("excerpts on one line with an ellipsis", () => {
     expect(excerpt("a\n\nb   c")).toBe("a b c");
     expect(excerpt("x".repeat(200), 10)).toBe("xxxxxxxxx…");
+  });
+});
+
+describe("dayLabel", () => {
+  const now = new Date(2026, 8, 19, 22, 0, 0);
+  it("groups by calendar day, not by 24-hour windows", () => {
+    expect(dayLabel(new Date(2026, 8, 19, 1, 0).toISOString(), now)).toBe("Today");
+    expect(dayLabel(new Date(2026, 8, 18, 23, 59).toISOString(), now)).toBe("Yesterday");
+    expect(dayLabel(new Date(2026, 8, 15, 12, 0).toISOString(), now)).toMatch(/day$/);
+    expect(dayLabel(new Date(2026, 7, 1, 12, 0).toISOString(), now)).toMatch(/Aug 1/);
+    expect(dayLabel("nope", now)).toBe("Earlier");
   });
 });

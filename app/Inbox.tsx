@@ -1,7 +1,7 @@
 // Inbox: three buckets under one segmented control. Notifications mark
 // themselves read as you act on them; DMs and topic chats open in place with
 // a reply box, no navigation.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UrlLink, useRpc } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { ArrowLeft01Icon, SentIcon } from "@hugeicons/core-free-icons";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import type { Author, Conversation, Notification, TopicChat } from "../lib/contract";
 import { TINKERER_BASE_URL } from "../lib/client";
-import { displayName, excerpt, relativeTime } from "../lib/format";
+import { dayLabel, displayName, excerpt, relativeTime } from "../lib/format";
 import { Linkified } from "./PostCard";
 import { CountBadge, EmptyState, ErrorState, Glyph, ListSkeleton, Tip, UserAvatar, useAsync } from "./shared";
 import { invalidateStatus, useChanges, useStatus } from "./store";
@@ -63,6 +63,17 @@ function NotificationRow({ item, onRead }: { item: Notification; onRead: (id: st
   );
 }
 
+function groupByDay<T extends { createdAt: string }>(items: T[]): Array<{ label: string; items: T[] }> {
+  const groups: Array<{ label: string; items: T[] }> = [];
+  for (const item of items) {
+    const label = dayLabel(item.createdAt);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(item);
+    else groups.push({ label, items: [item] });
+  }
+  return groups;
+}
+
 function Notifications() {
   const rpc = useRpc<typeof rpcContract>();
   const list = useAsync(() => rpc.call("notifications", {}), [rpc]);
@@ -106,11 +117,16 @@ function Notifications() {
           </Button>
         </div>
       ) : null}
-      <ul className="-mx-2 divide-y divide-border/60">
-        {list.data.items.map((item) => (
-          <NotificationRow key={item.id} item={item} onRead={markRead} />
-        ))}
-      </ul>
+      {groupByDay(list.data.items).map((group) => (
+        <section key={group.label} aria-label={group.label}>
+          <h4 className="tk-day py-1.5 text-xs font-medium text-muted-foreground">{group.label}</h4>
+          <ul className="-mx-2 divide-y divide-border/60">
+            {group.items.map((item) => (
+              <NotificationRow key={item.id} item={item} onRead={markRead} />
+            ))}
+          </ul>
+        </section>
+      ))}
       {list.data.nextCursor ? (
         <div className="flex justify-center py-1">
           <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => void loadMore()} disabled={more}>
@@ -169,6 +185,12 @@ function ReplyBox({ placeholder, onSend }: { placeholder: string; onSend: (conte
 }
 
 function MessageList({ items, meId }: { items: Array<{ id: string; author: Author | undefined; content: string; createdAt: string; senderId?: string }>; meId: string | null }) {
+  // The newest message is the reason you opened this; land on it.
+  const endRef = useRef<HTMLLIElement>(null);
+  const last = items[items.length - 1]?.id;
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [last]);
   if (items.length === 0) return <p className="py-6 text-center text-xs text-muted-foreground">No messages yet.</p>;
   return (
     <ul className="space-y-3 py-1">
@@ -187,6 +209,7 @@ function MessageList({ items, meId }: { items: Array<{ id: string; author: Autho
           </li>
         );
       })}
+      <li ref={endRef} aria-hidden className="h-px" />
     </ul>
   );
 }

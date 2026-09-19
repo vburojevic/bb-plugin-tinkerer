@@ -2,6 +2,7 @@
 // then the feed, then a quiet "older". Topics come from a searchable picker
 // sorted by activity; hashtags are the week's trending ones.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowUp01Icon } from "@hugeicons/core-free-icons";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import { ArrowDown01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -129,7 +130,12 @@ export function Timeline({ className }: { className?: string }) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  /** Posts a poll found while the reader was scrolled down; shown as a pill. */
+  const [pending, setPending] = useState<Post[]>([]);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
   const seq = useRef(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const filterKey = filter.kind === "all" ? "all" : filter.kind === "hashtag" ? `#${filter.slug}` : `topic:${filter.topic.slug}`;
 
   const loadFirst = useCallback(() => {
@@ -151,25 +157,43 @@ export function Timeline({ className }: { className?: string }) {
   }, [rpc, filterKey]);
   useEffect(loadFirst, [loadFirst]);
 
-  // New posts from a poll slide in at the top; what you were reading stays put.
+  const scrollParent = () => rootRef.current?.closest<HTMLElement>(".tk-scroll") ?? null;
+
+  const insert = useCallback((items: Post[]) => {
+    if (items.length === 0) return;
+    setFresh(new Set(items.map((p) => p.id)));
+    setPosts((current) => [...items, ...(current ?? []).filter((p) => !items.some((n) => n.id === p.id))]);
+    window.setTimeout(() => setFresh(new Set()), 800);
+  }, []);
+
+  // New posts from a poll: at the top of the feed they slide in; scrolled
+  // down, a pill counts them and inserting is your call, so nothing moves
+  // under what you are reading.
   const mergeFresh = useCallback(() => {
     const mine = seq.current;
     rpc.call("timeline", feedArgs(filter)).then(
       (page) => {
         if (mine !== seq.current) return;
-        setPosts((current) => {
-          if (current === null) return page.items;
-          const known = new Map(current.map((p) => [p.id, p]));
-          const fresh = page.items.filter((p) => !known.has(p.id));
-          const updated = current.map((p) => page.items.find((n) => n.id === p.id) ?? p);
-          return [...fresh, ...updated];
-        });
+        setPosts((current) => (current === null ? current : current.map((p) => page.items.find((n) => n.id === p.id) ?? p)));
+        const known = new Set([...(posts ?? []).map((p) => p.id), ...pending.map((p) => p.id)]);
+        const arrived = page.items.filter((p) => !known.has(p.id));
+        if (arrived.length === 0) return;
+        const atTop = (scrollParent()?.scrollTop ?? 0) < 80;
+        if (atTop) insert(arrived);
+        else setPending((current) => [...arrived, ...current]);
       },
       () => {},
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rpc, filterKey]);
+  }, [rpc, filterKey, posts, pending, insert]);
   useChanges(["timeline"], mergeFresh);
+
+  const showPending = () => {
+    const items = pending;
+    setPending([]);
+    insert(items);
+    scrollParent()?.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const loadMore = async () => {
     if (!cursor || loadingMore) return;
@@ -185,12 +209,35 @@ export function Timeline({ className }: { className?: string }) {
     }
   };
 
-  const replace = (fresh: Post) => setPosts((current) => current?.map((p) => (p.id === fresh.id ? fresh : p)) ?? current);
+  const replace = (next: Post) => setPosts((current) => current?.map((p) => (p.id === next.id ? next : p)) ?? current);
+
+  // Older posts load themselves as the end comes into view; the button stays as the keyboard path.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !cursor) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void loadMore();
+      },
+      { root: scrollParent(), rootMargin: "600px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor, loadingMore, posts?.length]);
   const emptyTitle = filter.kind === "all" ? "The timeline is quiet" : filter.kind === "hashtag" ? `Nothing tagged #${filter.slug} yet` : `Nothing in ${filter.topic.name} yet`;
 
   return (
-    <div className={cn("space-y-3", className)}>
-      <FilterRow filter={filter} onFilter={setFilter} />
+    <div ref={rootRef} className={cn("space-y-3", className)}>
+      <FilterRow filter={filter} onFilter={(next) => { setPending([]); setFilter(next); }} />
+      {pending.length > 0 ? (
+        <div className="tk-new-pill">
+          <Button size="sm" className="h-8 gap-1.5 rounded-full shadow-md" onClick={showPending}>
+            <Glyph icon={ArrowUp01Icon} size={14} />
+            {pending.length === 1 ? "1 new post" : `${pending.length} new posts`}
+          </Button>
+        </div>
+      ) : null}
       {error ? (
         <ErrorState message={error} onRetry={loadFirst} />
       ) : posts === null ? (
@@ -200,10 +247,10 @@ export function Timeline({ className }: { className?: string }) {
       ) : (
         <>
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} onChange={replace} />
+            <PostCard key={post.id} post={post} onChange={replace} className={fresh.has(post.id) ? "tk-enter" : undefined} />
           ))}
           {cursor ? (
-            <div className="flex justify-center py-1">
+            <div ref={sentinelRef} className="flex justify-center py-1">
               <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => void loadMore()} disabled={loadingMore}>
                 {loadingMore ? "Loading…" : "Older posts"}
               </Button>

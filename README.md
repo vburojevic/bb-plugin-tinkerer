@@ -32,19 +32,30 @@ Or from a shell:
 bb plugin install git:https://github.com/vburojevic/bb-plugin-tinkerer
 ```
 
-Then paste your key: **Settings → Plugins → Tinkerer → Tinkerer Club API key**.
-Create one at [app.tinkerer.club](https://app.tinkerer.club) under
-Settings → API keys. The key is stored as a secret setting on this machine and
-never reaches the browser, an agent, or a log. Requires bb 0.43 or newer and a
-Tinkerer Club membership.
+Requires bb 0.43 or newer and a Tinkerer Club membership.
+
+## First run
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/connect.png">
+  <img alt="The first-run state: three numbered steps to connect a Tinkerer Club API key" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/connect.png">
+</picture>
+
+Until a key is set the panel shows the three steps and nothing else: create a
+key at [app.tinkerer.club](https://app.tinkerer.club) under Settings → API
+keys, paste it in bb under **Settings → Plugins → Tinkerer**, and the panel
+connects on its own. The key is stored as a secret setting on this machine and
+never reaches the browser, an agent, or a log.
 
 ## Timeline
 
 Post cards carry the author, photos and video, link previews, polls you can
-vote in, reactions, like, bookmark, and comments that open in place with a
-reply box. Long articles fold behind *Show more*. The row above the feed
-filters it: any topic from a searchable list sorted by activity, or one of the
-week's trending hashtags. New posts slide in at the top as they arrive.
+vote in, reactions you can tap to join, like, bookmark, and comments that
+open in place with a reply box. Long articles fold behind *Show more*. The row
+above the feed filters it: any topic from a searchable list sorted by
+activity, or one of the week's trending hashtags. Older posts load as you
+reach them. New posts slide in at the top while you are there; if you have
+scrolled down, a pill counts them and nothing moves until you tap it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/comments.png">
@@ -58,9 +69,10 @@ week's trending hashtags. New posts slide in at the top as they arrive.
   <img alt="The Inbox tab showing unread notifications with the Messages and Topics segments" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/inbox.png">
 </picture>
 
-Notifications, direct messages, rooms, and the topic chats you follow, under
-one control. Notifications mark themselves read as you act on them. A
-conversation opens in place; reply without leaving bb.
+Notifications grouped by day, direct messages, rooms, and the topic chats you
+follow, under one control. Notifications mark themselves read as you act on
+them. A conversation opens in place on its newest message; reply without
+leaving bb.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/dm.png">
@@ -90,8 +102,8 @@ today / week / month switch.
 </picture>
 
 Start a lock-in named after what you are doing; when a thread is in view its
-title is prefilled. The countdown is the hero, todos sit under it, and members
-locked in alongside you appear at the bottom. Agents can start a session for
+title is prefilled. The countdown is the hero with the hour's progress under
+it, todos sit below, and members locked in alongside you appear at the bottom. Agents can start a session for
 the task they are on and tick todos as they finish.
 
 ## Live

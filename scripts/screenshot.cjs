@@ -94,6 +94,19 @@ async function phone(browser, scheme) {
   await context.close();
 }
 
+// The first-run state needs no key: run with `bb plugin config tinkerer unset apiKey`
+// and demo off, then restore the key with scripts/dev-set-key.mjs.
+async function connectOnly(browser, scheme) {
+  const dir = path.join(out, scheme);
+  const context = await browser.newContext({ viewport: { width: 1280, height: 820 }, colorScheme: scheme, deviceScaleFactor: 2 });
+  const page = await context.newPage();
+  await page.goto(panel, { waitUntil: "domcontentloaded" });
+  await settle(page, 15000);
+  await page.screenshot({ path: path.join(dir, "connect.png"), clip: { x: 320, y: 0, width: 960, height: 560 } });
+  console.log(`${scheme}: connect done`);
+  await context.close();
+}
+
 async function dmOnly(browser, scheme) {
   const dir = path.join(out, scheme);
   const context = await browser.newContext({ viewport: { width: 1280, height: 820 }, colorScheme: scheme, deviceScaleFactor: 2 });
@@ -113,6 +126,10 @@ async function dmOnly(browser, scheme) {
   for (const scheme of ["light", "dark"]) {
     if (only === "dm") {
       await dmOnly(browser, scheme);
+      continue;
+    }
+    if (only === "connect") {
+      await connectOnly(browser, scheme);
       continue;
     }
     await desktop(browser, scheme);

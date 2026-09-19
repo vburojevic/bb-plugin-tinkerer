@@ -78,3 +78,15 @@ draft, container-query layouts for the side panel and phones, live updates
 panel is visible), a theme-derived accent with a Tinkerer-green fallback,
 shadcn Tabs, Badge, Tooltip, Card, Progress, Textarea and Separator throughout,
 and the club's gear-and-wrench mark as the plugin icon.
+
+## Design polish pass (2026-09-19, late)
+
+Run against the impeccable polish playbook and its detector (clean). Timeline:
+older posts load on scroll, new posts insert at the top only when you are
+there and otherwise wait behind a "new posts" pill, one settle animation for
+arrivals, reaction chips are tappable, author names link to profiles. Inbox:
+notifications grouped by day, conversations open on the newest message.
+Lock-in: elapsed bar under the clock. Composer: shortcut hint on pointer
+devices. Narrow panels: tighter tabs so all five fit on a phone. First-run
+state redesigned with numbered steps and a "Get a key" link, and captured for
+the README. Width transitions replaced by transforms.

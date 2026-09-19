@@ -2,7 +2,7 @@
 // The nav panel keeps the tab in the route (`subPath`) so back/forward walk
 // it; the thread side panel keeps it in state. Both render this.
 import { useState, type ReactNode } from "react";
-import { useRpc } from "@get-bb/plugin-sdk/app";
+import { UrlLink, useRpc } from "@get-bb/plugin-sdk/app";
 import { Add01Icon, Key01Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -59,13 +59,29 @@ export function ConnectState() {
           ? status?.error
           : "Paste your personal API key in the plugin settings. It stays on this machine; every request goes out as you."}
       </p>
-      <ol className="mx-auto mt-4 max-w-xs space-y-1 text-left text-sm text-muted-foreground">
-        <li>1. Open app.tinkerer.club → Settings → API keys and create a key.</li>
-        <li>2. In bb, open Settings → Plugins → Tinkerer and paste it as the API key.</li>
-        <li>3. Come back here; the panel connects on its own.</li>
+      <ol className="mx-auto mt-5 max-w-xs space-y-2 text-left text-sm">
+        <li className="flex gap-3">
+          <span className="tk-spark-soft tk-spark-text flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums">1</span>
+          <span className="text-muted-foreground">
+            Create a key on <span className="text-foreground">app.tinkerer.club</span> under Settings → API keys.
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <span className="tk-spark-soft tk-spark-text flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums">2</span>
+          <span className="text-muted-foreground">
+            Paste it in bb under <span className="text-foreground">Settings → Plugins → Tinkerer</span>.
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <span className="tk-spark-soft tk-spark-text flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums">3</span>
+          <span className="text-muted-foreground">Come back here. The panel connects on its own.</span>
+        </li>
       </ol>
-      <div className="mt-5 flex justify-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => void refresh()}>
+      <div className="mt-6 flex justify-center gap-2">
+        <Button asChild variant="outline" size="sm">
+          <UrlLink href="https://app.tinkerer.club/settings">Get a key</UrlLink>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => void refresh()}>
           <Glyph icon={RefreshIcon} size={14} />
           Check again
         </Button>
@@ -85,7 +101,7 @@ export function TabStrip({ route, onRoute, right }: { route: PanelRoute; onRoute
             <TabsTrigger
               key={tab.id}
               value={tab.id}
-              className="h-7 shrink-0 gap-1.5 rounded-md px-2.5 text-sm font-normal text-muted-foreground shadow-none data-[state=active]:bg-muted data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              className="tk-tab h-7 shrink-0 gap-1.5 rounded-md px-2.5 text-sm font-normal text-muted-foreground shadow-none data-[state=active]:bg-muted data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
               {tab.label}
               {tab.id === "inbox" ? <CountBadge count={unread} /> : null}
@@ -145,7 +161,7 @@ export function TinkererPanel({ route, onRoute, threadId }: { route: PanelRoute;
     <TooltipProvider>
       <div className="tk-root flex h-full min-h-0 flex-col">
         <TabStrip route={route} onRoute={onRoute} right={status?.connected ? <NewPostButton /> : null} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="tk-scroll min-h-0 flex-1 overflow-y-auto">
           <PanelBody route={route} threadId={threadId} />
         </div>
       </div>

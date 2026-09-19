@@ -174,8 +174,30 @@ function handle(path: string, input: Record<string, unknown>): unknown {
     case "post/byId": return find(id) ?? posts[0];
     case "post/listComments": return { items: comments[postId] ?? [], nextCursor: null };
     case "post/addComment": { const c = { id: nextId("c"), postId, content: String(input.content ?? ""), parentId: null, createdAt: new Date().toISOString(), author: ME, images: [] }; comments[postId] = [...(comments[postId] ?? []), c]; const p = find(postId); if (p) p.commentCount += 1; return c; }
-    case "post/like": { const p = find(postId); if (p && !p.likedByMe) { p.likedByMe = true; p.likeCount += 1; } return { ok: true }; }
-    case "post/unlike": { const p = find(postId); if (p && p.likedByMe) { p.likedByMe = false; p.likeCount -= 1; } return { ok: true }; }
+    case "post/like": {
+      const p = find(postId);
+      const emoji = typeof input.reaction === "string" ? input.reaction : "❤️";
+      if (p && emoji !== "❤️") {
+        if (!p.myReactions.includes(emoji)) {
+          p.myReactions = [...p.myReactions, emoji];
+          const r = p.reactions.find((x) => x.emoji === emoji);
+          if (r) r.count += 1; else p.reactions.push({ emoji, count: 1 });
+        }
+      } else if (p && !p.likedByMe) { p.likedByMe = true; p.likeCount += 1; }
+      return { ok: true };
+    }
+    case "post/unlike": {
+      const p = find(postId);
+      const emoji = typeof input.reaction === "string" ? input.reaction : "❤️";
+      if (p && emoji !== "❤️") {
+        if (p.myReactions.includes(emoji)) {
+          p.myReactions = p.myReactions.filter((x) => x !== emoji);
+          const r = p.reactions.find((x) => x.emoji === emoji);
+          if (r) { r.count -= 1; if (r.count <= 0) p.reactions = p.reactions.filter((x) => x !== r); }
+        }
+      } else if (p && p.likedByMe) { p.likedByMe = false; p.likeCount -= 1; }
+      return { ok: true };
+    }
     case "post/toggleBookmark": { const p = find(postId); if (p) p.bookmarkedByMe = !p.bookmarkedByMe; return { ok: true }; }
     case "post/votePoll": { const p = find(postId); if (p?.poll && !p.poll.myOptionId) { p.poll.myOptionId = String(input.optionId); p.poll.totalVoteCount += 1; for (const o of p.poll.options) { if (o.id === input.optionId) o.voteCount += 1; o.percentage = Math.round((o.voteCount / p.poll.totalVoteCount) * 100); } } return { ok: true }; }
     case "post/previewLink": { const url = String(input.url ?? ""); let host = url; try { host = new URL(url).hostname; } catch { /* keep */ } return { url, title: host === "getbb.app" ? "bb" : `Preview of ${host}`, description: "A link preview the composer fetched on its own.", imageUrl: `https://picsum.photos/seed/${encodeURIComponent(host)}/1200/630`, provider: host.toUpperCase().includes("GITHUB") ? "GITHUB" : "WEBSITE", author: null }; }

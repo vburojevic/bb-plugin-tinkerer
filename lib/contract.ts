@@ -343,6 +343,7 @@ export const rpcContract = defineRpcContract({
   like: { input: z.object({ postId: z.string(), liked: z.boolean() }).strict(), output: postSchema },
   bookmark: { input: z.object({ postId: z.string() }).strict(), output: postSchema },
   votePoll: { input: z.object({ postId: z.string(), optionId: z.string() }).strict(), output: postSchema },
+  react: { input: z.object({ postId: z.string(), emoji: z.string().min(1).max(16), on: z.boolean() }).strict(), output: postSchema },
   notifications: {
     input: z.object({ cursor: z.string().optional() }).strict(),
     output: z.object({ items: z.array(notificationSchema), nextCursor: z.string().nullable() }),

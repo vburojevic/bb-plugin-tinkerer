@@ -136,17 +136,29 @@ export function LockIn({ className, threadId: explicitThreadId }: { className?: 
     <div className={cn("space-y-5", className)}>
       <Card className="p-4" role="region" aria-label="Lock-in session">
         {session ? (
-          <div className="flex items-center gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="text-xs text-muted-foreground">Locked in for {formatDuration(now - Date.parse(session.startedAt))}</div>
-              <div className="mt-0.5 truncate text-base font-medium text-foreground">{session.title ?? "Untitled session"}</div>
+          <div>
+            <div className="flex items-center gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-muted-foreground">Locked in for {formatDuration(now - Date.parse(session.startedAt))}</div>
+                <div className="mt-0.5 truncate text-base font-medium text-foreground">{session.title ?? "Untitled session"}</div>
+              </div>
+              <div className="tk-clock tk-spark-text text-3xl font-semibold" aria-live="off" aria-label="Time remaining">
+                {countdown(session.expiresAt, now)}
+              </div>
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => void act(() => rpc.call("lockInFinish", { id: session.id }), "Lock-in finished")}>
+                Finish
+              </Button>
             </div>
-            <div className="tk-clock tk-spark-text text-3xl font-semibold" aria-live="off" aria-label="Time remaining">
-              {countdown(session.expiresAt, now)}
-            </div>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => void act(() => rpc.call("lockInFinish", { id: session.id }), "Lock-in finished")}>
-              Finish
-            </Button>
+            {(() => {
+              const start = Date.parse(session.startedAt);
+              const end = Date.parse(session.expiresAt);
+              const ratio = end > start ? Math.max(0, Math.min(1, (now - start) / (end - start))) : 0;
+              return (
+                <div className="tk-elapsed mt-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ratio * 100)} aria-label="Session elapsed">
+                  <span style={{ "--tk-ratio": ratio } as React.CSSProperties} />
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <form

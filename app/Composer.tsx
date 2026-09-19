@@ -285,6 +285,7 @@ export function Composer({ open, onOpenChange, initialContent, onPosted }: Compo
               </SelectContent>
             </Select>
             <span className="flex-1" />
+            <span className="hidden text-xs text-muted-foreground [@media(hover:hover)]:inline">⌘↵ publishes</span>
             {hasDraft ? (
               <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={discard} disabled={busy !== null}>
                 Discard

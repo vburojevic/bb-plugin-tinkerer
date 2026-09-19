@@ -30,20 +30,6 @@
 .tk-spark-soft { background: var(--tk-spark-soft); }
 .tk-spark-line { border-color: var(--tk-spark-line); }
 
-/* Level progress: one sequential fill in the spark tone on the host's muted track. */
-.tk-track {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--muted);
-  overflow: hidden;
-}
-.tk-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--tk-spark);
-  transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
 /* shadcn Progress, filled in the accent instead of --primary. */
 .tk-progress > div { background: var(--tk-spark); }
 
@@ -63,7 +49,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .tk-live-dot { animation: none; }
-  .tk-fill { transition: none; }
+  .tk-poll-bar > .tk-poll-fill,
+  .tk-elapsed > span { transition: none; }
 }
 
 /* The unread pill in the sidebar row and on tab labels. */
@@ -163,9 +150,11 @@
 }
 .tk-poll-bar > .tk-poll-fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(var(--tk-ratio, 0));
   background: var(--muted);
-  transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .tk-poll-bar[data-mine="true"] > .tk-poll-fill { background: var(--tk-spark-soft); }
 .tk-poll-bar[data-mine="true"] { border-color: var(--tk-spark-line); }
@@ -181,4 +170,56 @@
   field-sizing: content;
   min-height: 7.5rem;
   max-height: 24rem;
+}
+
+/* A post that arrived while you were reading: one short settle, then still. */
+.tk-enter {
+  animation: tk-enter 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes tk-enter {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk-enter { animation: none; }
+}
+
+/* The "new posts" pill floats over the feed while you are scrolled down. */
+.tk-new-pill {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.tk-new-pill > * { pointer-events: auto; }
+
+/* Elapsed share of a lock-in hour, under the clock. */
+.tk-elapsed {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--muted);
+  overflow: hidden;
+}
+.tk-elapsed > span {
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(var(--tk-ratio, 0));
+  background: var(--tk-spark);
+  transition: transform 1s linear;
+}
+
+/* Tighter tabs when the panel is a phone or a narrow side panel. */
+@container tk (max-width: 430px) {
+  .tk-tab { padding-inline: 0.5rem; font-size: 0.8125rem; }
+}
+
+/* Day headings inside the inbox. */
+.tk-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--background);
 }

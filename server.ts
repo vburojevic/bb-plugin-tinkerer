@@ -287,6 +287,11 @@ export default async function plugin(bb: BbPluginApi) {
       client.invalidate("post/");
       return client.call<Post>("post/byId", { id: postId });
     },
+    async react({ postId, emoji, on }) {
+      await client.call(on ? "post/like" : "post/unlike", { postId, reaction: emoji });
+      client.invalidate("post/");
+      return client.call<Post>("post/byId", { id: postId });
+    },
     async votePoll({ postId, optionId }) {
       await client.call("post/votePoll", { postId, optionId });
       client.invalidate("post/");

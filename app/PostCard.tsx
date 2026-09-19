@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import type { Comment, LinkPreview, Poll, Post } from "../lib/contract";
+import { TINKERER_BASE_URL } from "../lib/client";
 import { displayName, isVideoPath, mediaUrl, postMediaUrl, postUrl, relativeTime } from "../lib/format";
 import { Glyph, ListSkeleton, Tip, UserAvatar, useAsync } from "./shared";
 
@@ -132,7 +133,7 @@ function PollView({ poll, postId, onChange }: { poll: Poll; postId: string; onCh
             data-mine={mine}
             aria-pressed={mine}
           >
-            {showResults ? <span className="tk-poll-fill" style={{ width: `${pct}%` }} aria-hidden /> : null}
+            {showResults ? <span className="tk-poll-fill" style={{ "--tk-ratio": pct / 100 } as React.CSSProperties} aria-hidden /> : null}
             <span className="relative z-10 min-w-0 flex-1 truncate text-foreground">
               {option.emoji ? `${option.emoji} ` : ""}
               {option.label}
@@ -264,7 +265,7 @@ export function PostCard({ post, onChange, compact = false, className }: PostCar
   const rpc = useRpc<typeof rpcContract>();
   const [showComments, setShowComments] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [busy, setBusy] = useState<"like" | "bookmark" | null>(null);
+  const [busy, setBusy] = useState<"like" | "bookmark" | "react" | null>(null);
   const [commentBump, setCommentBump] = useState(0);
   const media = post.images ?? [];
   const previews = post.linkPreviews ?? [];
@@ -272,7 +273,21 @@ export function PostCard({ post, onChange, compact = false, className }: PostCar
   const isArticle = post.type === "ARTICLE";
   const foldable = !expanded && (content.length > FOLD_CHARS || (isArticle && content.length > 300));
   const web = postUrl(post);
+  const profile = post.author.username ? `${TINKERER_BASE_URL}/u/${post.author.username}` : null;
   const time = post.publishedAt ?? post.createdAt;
+
+  const react = async (emoji: string) => {
+    if (busy) return;
+    setBusy("react");
+    try {
+      const on = !(post.myReactions ?? []).includes(emoji);
+      onChange?.(await rpc.call("react", { postId: post.id, emoji, on }));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Tinkerer Club did not accept that");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const mutate = async (kind: "like" | "bookmark") => {
     if (busy) return;
@@ -294,7 +309,13 @@ export function PostCard({ post, onChange, compact = false, className }: PostCar
         <UserAvatar author={post.author} className={compact ? "size-7" : "size-8"} />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="flex items-baseline gap-1.5">
-            <span className="truncate text-sm font-medium text-foreground">{displayName(post.author)}</span>
+            {profile ? (
+              <UrlLink href={profile} className="truncate text-sm font-medium text-foreground no-underline hover:underline">
+                {displayName(post.author)}
+              </UrlLink>
+            ) : (
+              <span className="truncate text-sm font-medium text-foreground">{displayName(post.author)}</span>
+            )}
             {post.author.username ? <span className="truncate text-xs text-muted-foreground">@{post.author.username}</span> : null}
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -361,12 +382,26 @@ export function PostCard({ post, onChange, compact = false, className }: PostCar
         )}
         <ActionButton icon={Bookmark01Icon} label={post.bookmarkedByMe ? "Remove bookmark" : "Bookmark"} active={post.bookmarkedByMe} onClick={() => void mutate("bookmark")} />
         {post.reactions && post.reactions.length > 0 ? (
-          <span className="ml-1 flex items-center gap-1.5 text-xs text-muted-foreground" aria-label="Reactions">
-            {post.reactions.slice(0, 4).map((reaction) => (
-              <span key={reaction.emoji} className="tabular-nums">
-                {reaction.emoji} {reaction.count}
-              </span>
-            ))}
+          <span className="ml-1 flex items-center gap-1" role="group" aria-label="Reactions">
+            {post.reactions.slice(0, 4).map((reaction) => {
+              const mine = (post.myReactions ?? []).includes(reaction.emoji);
+              return (
+                <button
+                  key={reaction.emoji}
+                  type="button"
+                  onClick={() => void react(reaction.emoji)}
+                  aria-pressed={mine}
+                  aria-label={`${mine ? "Remove" : "Add"} ${reaction.emoji} reaction`}
+                  className={cn(
+                    "inline-flex h-6 items-center gap-1 rounded-full border px-1.5 text-xs tabular-nums transition-colors",
+                    mine ? "tk-spark-soft tk-spark-line text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+                  )}
+                >
+                  <span aria-hidden>{reaction.emoji}</span>
+                  {reaction.count}
+                </button>
+              );
+            })}
           </span>
         ) : null}
         <span className="flex-1" />
