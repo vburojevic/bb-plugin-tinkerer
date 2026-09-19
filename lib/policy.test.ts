@@ -18,6 +18,7 @@ describe("classifyProcedure", () => {
       "event/liveById", "event/liveChat/list", "project/myProjects", "project/community", "topic/list",
       "topic/tree", "topic/feed", "search/all", "user/getCurrentUser", "user/getProfileByUsername",
       "user/listMembers", "friend/listFriends", "club/benefits", "club/giveaways", "club/unreadClubItems",
+      "messaging/dmUnreadCount", "gear/productBySlug", "gear/mine", "friend/statusWith", "post/likedByMe", "club/benefitBySlug",
     ]) {
       expect(classifyProcedure(name), name).toBe("read");
     }

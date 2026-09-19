@@ -45,6 +45,22 @@ const READ_VERBS = [
   "typingStatus",
   "bookmarked",
   "article",
+  "dmUnreadCount",
+  "status",
+  "mine",
+  "browse",
+  "homepage",
+  "sponsors",
+  "overview",
+  "directory",
+  "public",
+  "liked",
+  "pollResults",
+  "hashtagSummary",
+  "available",
+  "forTarget",
+  "submittable",
+  "templateCapabilities",
 ];
 
 const KNOWN = new Set(PROCEDURES);
@@ -57,6 +73,8 @@ export function classifyProcedure(name: string): ProcedureClass {
   if (name.startsWith("admin/") || BLOCKED_EXACT.has(name)) return "blocked";
   const last = name.split("/").pop() ?? "";
   const lower = last.toLowerCase();
+  // "productBySlug", "itemById", "benefitBySlug": a lookup by key is a read.
+  if (/[a-z]By[A-Z]/.test(last)) return "read";
   // `liveChat/list` reads; `liveChat/send` writes. Check the verb on the last segment only.
   for (const verb of READ_VERBS) {
     const v = verb.toLowerCase();
