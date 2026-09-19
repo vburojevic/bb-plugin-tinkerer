@@ -247,9 +247,9 @@ export function PostCard({ post, onChange, compact = false, className }: PostCar
       ) : null}
 
       <footer className="mt-2 -ml-2 flex items-center gap-0.5">
-        <ActionButton icon={FavouriteIcon} label={post.likedByMe ? "Unlike" : "Like"} count={post.likeCount} active={post.likedByMe} onClick={() => void mutate("like")} />
+        <ActionButton icon={FavouriteIcon} label={post.likedByMe ? "Unlike" : "Like"} count={post.likeCount ?? undefined} active={post.likedByMe} onClick={() => void mutate("like")} />
         {compact ? (
-          <ActionButton icon={Comment01Icon} label="Comments" count={post.commentCount} />
+          <ActionButton icon={Comment01Icon} label="Comments" count={post.commentCount ?? undefined} />
         ) : (
           <ActionButton icon={Comment01Icon} label={showComments ? "Hide comments" : "Show comments"} count={(post.commentCount ?? 0) + commentBump} active={showComments} onClick={() => setShowComments((open) => !open)} />
         )}

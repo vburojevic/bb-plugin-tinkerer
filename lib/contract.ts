@@ -8,6 +8,8 @@ import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 const nullableString = z.string().nullable().optional();
+/** Counts the platform sometimes reports as null (no GitHub link, no reads yet). */
+const nullableNumber = z.number().nullable().optional();
 
 export const authorSchema = z.looseObject({
   id: z.string(),
@@ -54,9 +56,9 @@ export const postSchema = z.looseObject({
     .optional(),
   topics: z.array(z.looseObject({ slug: z.string(), name: nullableString, emoji: nullableString })).optional(),
   bookmarkedByMe: z.boolean().optional(),
-  commentCount: z.number().optional(),
+  commentCount: nullableNumber,
   linkPreviews: z.array(linkPreviewSchema).optional(),
-  likeCount: z.number().optional(),
+  likeCount: nullableNumber,
   likedByMe: z.boolean().optional(),
   myReactions: z.array(z.string()).optional(),
   reactions: z.array(reactionSchema).optional(),
@@ -99,7 +101,7 @@ export const conversationSchema = z.looseObject({
     .nullable()
     .optional(),
   lastMessageAt: nullableString,
-  unreadCount: z.number().optional(),
+  unreadCount: nullableNumber,
   memberCount: z.number().nullable().optional(),
 });
 export type Conversation = z.infer<typeof conversationSchema>;
@@ -120,8 +122,8 @@ export const topicChatSchema = z.looseObject({
   name: z.string(),
   emoji: nullableString,
   kind: z.string().optional(),
-  messageCount: z.number().optional(),
-  unreadMentionCount: z.number().optional(),
+  messageCount: nullableNumber,
+  unreadMentionCount: nullableNumber,
   lastMessage: z
     .looseObject({ content: z.string().nullable().optional(), createdAt: z.string().optional(), kind: z.string().optional() })
     .nullable()
@@ -187,7 +189,7 @@ export const badgeSchema = z.looseObject({
   category: nullableString,
   earned: z.boolean(),
   earnedAt: nullableString,
-  progress: z.number().optional(),
+  progress: nullableNumber,
   assetPath: nullableString,
 });
 export type Badge = z.infer<typeof badgeSchema>;
@@ -195,7 +197,7 @@ export type Badge = z.infer<typeof badgeSchema>;
 export const leaderboardRowSchema = z.looseObject({
   rank: z.number(),
   points: z.number(),
-  githubCommits: z.number().optional(),
+  githubCommits: nullableNumber,
   level: levelSchema.optional(),
   user: authorSchema,
 });
