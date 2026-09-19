@@ -1,225 +1,371 @@
-// bb-plugin-tinkerer — a BB plugin backend entry.
+// bb-plugin-tinkerer — server entry.
 //
-// The default export is a factory that receives the plugin API. BB supplies
-// the tiny defineRpcContract runtime helper; the API type remains type-only.
-//
-// The example is a todo list. One store in bb.storage.kv serves three
-// surfaces: the Example todos page (app.tsx, over RPC), the `bb tinkerer` CLI
-// command (below), and the skill in skills/example-todos/SKILL.md that tells
-// agents how to use that command. A write from any surface publishes a realtime signal so
-// every open page refetches.
-import { randomUUID } from "node:crypto";
-import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
+// Wires the Tinkerer Club client (lib/client.ts), the live-state poller
+// (lib/service.ts), the RPC surface the panel reads (lib/contract.ts), the
+// agent tools (lib/tools.ts) and the `bb tinkerer` CLI (lib/cli.ts) into bb.
+// The API key lives in a secret setting and never leaves this process.
+import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { buildCli } from "./lib/cli";
+import { createTinkererClient } from "./lib/client";
+import {
+  REALTIME_CHANNEL,
+  rpcContract,
+  type CalendarEvent,
+  type Comment,
+  type ComposeInput,
+  type Conversation,
+  type DmMessage,
+  type Badge,
+  type LedgerRow,
+  type LeaderboardRow,
+  type LiveBanner,
+  type LockInState,
+  type LockInTodo,
+  type Notification,
+  type Post,
+  type Project,
+  type RealtimeSignal,
+  type Topic,
+  type TopicChat,
+  type TopicChatMessage,
+  type UserStats,
+  type Author,
+  type LinkPreview,
+} from "./lib/contract";
+import { createTinkererService } from "./lib/service";
+import { buildTools } from "./lib/tools";
+import { excerpt } from "./lib/format";
 
-const todoSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  done: z.boolean(),
-  createdAt: z.string(),
-});
-export type Todo = z.infer<typeof todoSchema>;
+export type { rpcContract } from "./lib/contract";
 
-// Both schemas run at the wire boundary. Handler input/output are inferred
-// from the shared contract; app.tsx imports only its type.
-export const rpcContract = defineRpcContract({
-  todos_list: {
-    input: z.null(),
-    output: z.object({ todos: z.array(todoSchema) }),
-  },
-  todos_add: {
-    input: z.object({ title: z.string().trim().min(1).max(200) }),
-    output: todoSchema,
-  },
-  todos_set_done: {
-    input: z.object({ id: z.string(), done: z.boolean() }),
-    output: todoSchema,
-  },
-  todos_remove: {
-    input: z.object({ id: z.string() }),
-    output: z.object({ removed: z.boolean() }),
-  },
-});
-
-/** Realtime channel app.tsx listens on; the payload is the todo count. */
-const TODOS_CHANGED = "todos-changed";
+const TTL_SHORT = 20_000;
+const TTL_LONG = 5 * 60_000;
+export const POST_APPROVAL_RENDERER = "post-approval";
 
 export default async function plugin(bb: BbPluginApi) {
-  bb.log.info("loaded");
-
-  // Declarative settings — rendered in BB's settings UI and editable with
-  // `bb plugin config tinkerer`. Add `secret: true` for values like API keys.
-  // Settings are read once per load: reload the plugin after changing one.
   const settings = bb.settings.define({
-    showDone: {
+    apiKey: {
+      type: "string",
+      label: "Tinkerer Club API key",
+      description: "Your personal key (starts with tnk_). Create one at https://app.tinkerer.club under Settings → API keys. It stays on this machine.",
+      secret: true,
+    },
+    pollIntervalSeconds: {
+      type: "number",
+      label: "Poll interval (seconds)",
+      description: "How often to check unread counts and the live banner. 30–600.",
+      experimental_schema: z.number().int().min(30).max(600),
+      default: 60,
+    },
+    defaultTimeline: {
       type: "boolean",
-      label: "Show completed todos",
+      label: "New posts show on the timeline by default",
+      description: "Off means posts are visible in their topics only unless you flip the toggle.",
       default: true,
     },
+    confirmAgentPosts: {
+      type: "boolean",
+      label: "Confirm before an agent posts",
+      description: "When on, tinkerer_post opens an approval card in the thread and only your click publishes.",
+      default: true,
+    },
+    allowAgentWrites: {
+      type: "boolean",
+      label: "Allow agent writes via tinkerer_call",
+      description: "Lets the generic tinkerer_call tool run write procedures (send, like, markRead, …). Read procedures are always allowed.",
+      default: false,
+    },
   });
-  const { showDone } = await settings.get();
 
-  // Namespaced key-value storage in bb.db (JSON values, up to 256KB each).
-  // For bigger or relational data use bb.storage.database().
-  async function readTodos(): Promise<Todo[]> {
-    return (await bb.storage.kv.get<Todo[]>("todos")) ?? [];
-  }
-  async function writeTodos(todos: Todo[]): Promise<void> {
-    await bb.storage.kv.set("todos", todos);
-    // Ephemeral broadcast to every connected client; nothing is persisted.
-    bb.realtime.publish(TODOS_CHANGED, { count: todos.length });
+  let current = await settings.get();
+  settings.onChange((next, prev) => {
+    current = next;
+    if (next.apiKey !== prev.apiKey) {
+      service.reset();
+      void service.refresh().catch(() => {});
+    }
+  });
+
+  let disposed = false;
+  const publish = (signal: RealtimeSignal) => {
+    if (disposed) return;
+    try {
+      bb.realtime.publish(REALTIME_CHANNEL, signal);
+    } catch {
+      // A reload can race a late publish; the next poll republishes.
+    }
+  };
+
+  const client = createTinkererClient({ getKey: () => current.apiKey ?? "" });
+  const service = createTinkererService({
+    client,
+    settings: () => ({ pollIntervalSeconds: current.pollIntervalSeconds, defaultTimeline: current.defaultTimeline }),
+    kv: bb.storage.kv,
+    publish,
+    log: bb.log,
+  });
+
+  bb.background.service("poll", {
+    async start(signal) {
+      await service.run(signal);
+    },
+  });
+
+  // ---- shared operations (panel, tools, CLI) --------------------------------
+
+  const me = () => client.call<Author>("user/getCurrentUser", {}, { ttlMs: 10 * 60_000 });
+
+  async function createPost(draft: ComposeInput): Promise<Post> {
+    const post = await client.call<Post>("post/create", {
+      content: draft.content,
+      type: "SHORT",
+      topicSlugs: draft.topicSlugs,
+      images: [],
+      timeline: draft.timeline,
+      publish: draft.mode === "queue" ? "queue" : "now",
+      ...(draft.projectId ? { projectId: draft.projectId } : {}),
+      ...(draft.linkPreviewUrl ? { linkPreviewUrl: draft.linkPreviewUrl } : {}),
+    });
+    client.invalidate("post/");
+    return post;
   }
 
-  async function listTodos(): Promise<Todo[]> {
-    const todos = await readTodos();
-    return showDone ? todos : todos.filter((todo) => !todo.done);
+  async function lockInState() {
+    const [state, todos] = await Promise.all([
+      client.call<LockInState>("lockIn/state", {}),
+      client.call<LockInTodo[]>("lockIn/todos", {}),
+    ]);
+    return { state, todos };
   }
-  async function addTodo(title: string): Promise<Todo> {
-    const todo: Todo = {
-      id: randomUUID().slice(0, 8),
-      title,
-      done: false,
-      createdAt: new Date().toISOString(),
-    };
-    await writeTodos([...(await readTodos()), todo]);
-    return todo;
+  async function lockInStart(title: string | undefined, threadId: string | undefined, byAgent: boolean) {
+    await client.call("lockIn/start", title ? { title } : {});
+    client.invalidate("lockIn/");
+    const status = await service.refresh();
+    if (byAgent) publish({ kind: "toast", tone: "info", title: `Agent started a lock-in${title ? `: ${title}` : ""}`, href: "lockin" });
+    void threadId;
+    return (await client.call<LockInState>("lockIn/state", {})) ?? status;
   }
-  async function setTodoDone(id: string, done: boolean): Promise<Todo | null> {
-    const todos = await readTodos();
-    const todo = todos.find((candidate) => candidate.id === id);
-    if (todo === undefined) return null;
-    todo.done = done;
-    await writeTodos(todos);
-    return todo;
+  async function lockInFinish(id: string, threadId: string | undefined, byAgent: boolean) {
+    await client.call("lockIn/finish", { id });
+    client.invalidate("lockIn/");
+    await service.refresh();
+    if (byAgent) publish({ kind: "toast", tone: "success", title: "Agent finished the lock-in", href: "lockin" });
+    void threadId;
+    return client.call<LockInState>("lockIn/state", {});
   }
-  async function removeTodo(id: string): Promise<boolean> {
-    const todos = await readTodos();
-    const remaining = todos.filter((todo) => todo.id !== id);
-    if (remaining.length === todos.length) return false;
-    await writeTodos(remaining);
-    return true;
+  async function lockInTodos(): Promise<LockInTodo[]> {
+    client.invalidate("lockIn/");
+    publish({ kind: "status" });
+    return client.call<LockInTodo[]>("lockIn/todos", {});
   }
+  async function addTodo(title: string) {
+    await client.call("lockIn/createTodo", { id: crypto.randomUUID(), title });
+    return lockInTodos();
+  }
+  async function completeTodo(id: string, completed: boolean) {
+    await client.call("lockIn/updateTodo", { id, completed });
+    return lockInTodos();
+  }
+
+  async function markNotificationsRead(ids: string[]) {
+    for (const id of ids) await client.call("notification/markRead", { id });
+    if (ids.length > 0) void service.refresh().catch(() => {});
+  }
+
+  async function requestPostApproval(threadId: string, draft: ComposeInput, signal: AbortSignal): Promise<boolean> {
+    const result = await bb.ui.requestInput(
+      {
+        threadId,
+        rendererId: POST_APPROVAL_RENDERER,
+        title: "Post to Tinkerer Club",
+        payload: draft,
+        presentation: { label: { pending: "Waiting for you to approve a Tinkerer post", completed: "Answered a Tinkerer post approval" } },
+        describeSubmission(value) {
+          const approved = typeof value === "object" && value !== null && (value as { approved?: unknown }).approved === true;
+          return { title: approved ? "Approved a Tinkerer post" : "Declined a Tinkerer post", detail: excerpt(draft.content, 200) };
+        },
+      },
+      { signal },
+    );
+    return result.outcome === "submitted" && typeof result.value === "object" && result.value !== null && (result.value as { approved?: unknown }).approved === true;
+  }
+
+  // ---- RPC ------------------------------------------------------------------
 
   bb.rpc.register(rpcContract, {
-    todos_list: async () => ({ todos: await listTodos() }),
-    todos_add: ({ title }) => addTodo(title),
-    todos_set_done: async ({ id, done }) => {
-      const todo = await setTodoDone(id, done);
-      if (todo === null) throw new Error(`No todo with id ${id}`);
-      return todo;
+    status: () => service.status(),
+    refresh: () => service.refresh(),
+    async timeline({ cursor, topic }) {
+      const page = topic
+        ? await client.call<{ items: Post[]; nextCursor?: string | null }>("topic/feed", { slug: topic, includeChildren: true, limit: 20, ...(cursor ? { cursor } : {}) }, { ttlMs: TTL_SHORT })
+        : await client.call<{ items: Post[]; nextCursor?: string | null }>("post/timeline", { limit: 20, supportsSparsePages: true, ...(cursor ? { cursor } : {}) }, { ttlMs: TTL_SHORT });
+      return { items: page.items, nextCursor: page.nextCursor ?? null };
     },
-    todos_remove: async ({ id }) => ({ removed: await removeTodo(id) }),
-  });
-
-  // The `bb tinkerer` command: what agents (and you) use from a shell. Parsing
-  // argv is plugin-owned; `commands` is metadata BB renders into help and
-  // the generated plugin-commands skill without running plugin code.
-  const usage = [
-    "Usage:",
-    "  bb tinkerer list [--json]",
-    "  bb tinkerer add <title> [--json]",
-    "  bb tinkerer done <todo-id> [--json]",
-    "  bb tinkerer undo <todo-id> [--json]",
-    "  bb tinkerer remove <todo-id> [--json]",
-  ].join("\n");
-  function formatTodo(todo: Todo): string {
-    return `[${todo.done ? "x" : " "}] ${todo.id}  ${todo.title}`;
-  }
-  bb.cli.register({
-    name: "tinkerer",
-    summary: "Manage the Tinkerer plugin's example todo list",
-    commands: [
-      { name: "list", summary: "List todos", usage: "bb tinkerer list [--json]" },
-      {
-        name: "add",
-        summary: "Add a todo",
-        usage: "bb tinkerer add <title> [--json]",
-      },
-      {
-        name: "done",
-        summary: "Mark a todo done",
-        usage: "bb tinkerer done <todo-id> [--json]",
-      },
-      {
-        name: "undo",
-        summary: "Mark a todo not done",
-        usage: "bb tinkerer undo <todo-id> [--json]",
-      },
-      {
-        name: "remove",
-        summary: "Remove a todo",
-        usage: "bb tinkerer remove <todo-id> [--json]",
-      },
-    ],
-    async run(argv) {
-      const json = argv.includes("--json");
-      const [command, ...args] = argv.filter((arg) => arg !== "--json");
-      const reply = (value: unknown, text: string) => ({
-        exitCode: 0,
-        stdout: json ? JSON.stringify(value) : text,
-      });
-      const notFound = (missingId: string) => ({
-        exitCode: 1,
-        stderr: `No todo with id ${missingId}. Run "bb tinkerer list" to see ids.`,
-      });
-      const todoId = args[0];
-      switch (command) {
-        case undefined:
-        case "help":
-        case "--help":
-          return { exitCode: 0, stdout: usage };
-        case "list": {
-          const todos = await listTodos();
-          return reply(
-            todos,
-            todos.length === 0 ? "No todos." : todos.map(formatTodo).join("\n"),
-          );
-        }
-        case "add": {
-          const title = args.join(" ").trim();
-          if (title === "") break;
-          const todo = await addTodo(title);
-          return reply(todo, `Added ${formatTodo(todo)}`);
-        }
-        case "done":
-        case "undo": {
-          if (todoId === undefined || args.length !== 1) break;
-          const todo = await setTodoDone(todoId, command === "done");
-          if (todo === null) return notFound(todoId);
-          return reply(todo, formatTodo(todo));
-        }
-        case "remove": {
-          if (todoId === undefined || args.length !== 1) break;
-          if (!(await removeTodo(todoId))) return notFound(todoId);
-          return reply({ removed: true, id: todoId }, `Removed ${todoId}`);
-        }
+    trending: () => client.call<Array<{ slug: string; postCount: number }>>("post/trendingHashtags", { days: 7, limit: 12 }, { ttlMs: TTL_LONG }),
+    post: ({ id }) => client.call<Post>("post/byId", { id }, { ttlMs: TTL_SHORT }),
+    async comments({ postId, cursor }) {
+      const page = await client.call<{ items: Comment[]; nextCursor?: string | null }>("post/listComments", { postId, limit: 30, ...(cursor ? { cursor } : {}) });
+      return { items: page.items, nextCursor: page.nextCursor ?? null };
+    },
+    async addComment({ postId, content }) {
+      const comment = await client.call<Comment>("post/addComment", { postId, content, images: [] });
+      client.invalidate("post/");
+      return comment;
+    },
+    async like({ postId, liked }) {
+      await client.call(liked ? "post/like" : "post/unlike", liked ? { postId, reaction: "❤️" } : { postId });
+      client.invalidate("post/");
+      return client.call<Post>("post/byId", { id: postId });
+    },
+    async bookmark({ postId }) {
+      await client.call("post/toggleBookmark", { postId });
+      client.invalidate("post/");
+      return client.call<Post>("post/byId", { id: postId });
+    },
+    async notifications({ cursor }) {
+      const page = await client.call<{ items: Notification[]; nextCursor?: string | null }>("notification/list", { limit: 30, ...(cursor ? { cursor } : {}) });
+      return { items: page.items, nextCursor: page.nextCursor ?? null };
+    },
+    async markNotificationRead({ id }) {
+      await markNotificationsRead([id]);
+      return { ok: true };
+    },
+    async markAllNotificationsRead() {
+      await client.call("notification/markAllRead", {});
+      void service.refresh().catch(() => {});
+      return { ok: true };
+    },
+    conversations: () => client.call<Conversation[]>("messaging/myConversations", {}),
+    async messages({ conversationId, cursor }) {
+      const page = await client.call<{ messages: DmMessage[]; nextCursor?: string | null }>("messaging/messages/list", { conversationId, limit: 40, ...(cursor ? { cursor } : {}) });
+      return { messages: page.messages, nextCursor: page.nextCursor ?? null };
+    },
+    sendMessage: ({ conversationId, content }) => client.call<DmMessage>("messaging/messages/send", { conversationId, content, attachments: [] }),
+    async markConversationRead({ conversationId }) {
+      await client.call("messaging/markRead", { conversationId });
+      void service.refresh().catch(() => {});
+      return { ok: true };
+    },
+    topicChats: () => client.call<TopicChat[]>("topicChat/activeTopics", {}, { ttlMs: TTL_SHORT }),
+    async topicMessages({ slug, cursor }) {
+      const page = await client.call<{ messages: TopicChatMessage[]; nextCursor?: string | null }>("topicChat/messages/list", { topicSlug: slug, limit: 40, ...(cursor ? { cursor } : {}) });
+      return { messages: page.messages, nextCursor: page.nextCursor ?? null };
+    },
+    sendTopicMessage: ({ slug, content }) => client.call<TopicChatMessage>("topicChat/messages/send", { topicSlug: slug, content, attachments: [] }),
+    async markTopicRead({ slug }) {
+      await client.call("topicChat/markRead", { topicSlug: slug });
+      client.invalidate("topicChat/");
+      void service.refresh().catch(() => {});
+      return { ok: true };
+    },
+    async me() {
+      const user = await me();
+      const [stats, wallet, collection, commits, ledger] = await Promise.all([
+        client.call<UserStats>("leaderboard/userStats", { userId: user.id, includeRank: true }, { ttlMs: TTL_SHORT }),
+        client.call<{ balance: number }>("shop/wallet", {}, { ttlMs: TTL_SHORT }),
+        client.call<{ badges: Badge[] }>("gamification/collection", { userId: user.id }, { ttlMs: TTL_LONG }),
+        client.call<{ rows: Array<{ commits: number; rank: number; user: { id: string } }> }>("leaderboard/githubCommits", { period: "week", limit: 100, offset: 0 }, { ttlMs: TTL_LONG }),
+        client.call<{ rows: LedgerRow[] }>("shop/ledger", {}, { ttlMs: TTL_SHORT }),
+      ]);
+      const mine = commits.rows.find((row) => row.user.id === user.id);
+      return {
+        user,
+        stats,
+        balance: wallet.balance,
+        badges: collection.badges,
+        commitsWeek: mine ? { commits: mine.commits, rank: mine.rank } : null,
+        ledger: ledger.rows.slice(0, 8),
+      };
+    },
+    async leaderboard({ period }) {
+      const rows = await client.call<LeaderboardRow[]>("leaderboard/leaderboard", { period }, { ttlMs: TTL_LONG });
+      return rows.slice(0, 10);
+    },
+    lockIn: () => lockInState(),
+    lockInStart: ({ title }) => lockInStart(title, undefined, false),
+    lockInFinish: ({ id }) => lockInFinish(id, undefined, false),
+    lockInTodoCreate: ({ title }) => addTodo(title),
+    lockInTodoUpdate: ({ id, completed }) => completeTodo(id, completed),
+    async lockInTodoDelete({ id }) {
+      await client.call("lockIn/deleteTodo", { id });
+      return lockInTodos();
+    },
+    async live() {
+      const from = new Date();
+      const to = new Date(from.getTime() + 7 * 86_400_000);
+      const [banner, upcoming] = await Promise.all([
+        client.call<LiveBanner | null>("event/liveBanner", {}, { ttlMs: TTL_SHORT }),
+        client.call<CalendarEvent[]>("event/calendar", { from: from.toISOString(), to: to.toISOString() }, { ttlMs: TTL_LONG }),
+      ]);
+      return { banner: banner ?? null, upcoming };
+    },
+    async composerData() {
+      const [topics, projects] = await Promise.all([
+        client.call<Topic[]>("topic/list", {}, { ttlMs: TTL_LONG }),
+        client.call<Project[]>("project/myProjects", {}, { ttlMs: TTL_LONG }),
+      ]);
+      return { topics, projects };
+    },
+    previewLink: ({ url }) => client.call<LinkPreview | null>("post/previewLink", { url }, { ttlMs: TTL_LONG }),
+    createPost: (draft) => createPost(draft),
+    async threadTitle({ threadId }) {
+      try {
+        const thread = await bb.sdk.threads.get({ threadId });
+        return { title: thread.title ?? null };
+      } catch {
+        return { title: null };
       }
-      return { exitCode: 1, stderr: usage };
     },
   });
 
-  // Cleanup on reload/disable/shutdown; hooks run LIFO. The sanctioned place
-  // to clear timers and close connections.
-  bb.onDispose(() => {
-    bb.log.info("disposed");
-  });
+  // ---- agents ----------------------------------------------------------------
 
-  // Long-lived background work: starts after load, gets an AbortSignal on
-  // reload/disable/shutdown, and restarts with backoff if it crashes. Sleeps
-  // must wake on abort — a plain setTimeout sleeps through the stop window
-  // and the plugin reports "degraded (service did not stop)" on reload.
-  // bb.background.service("worker", {
-  //   async start(signal) {
-  //     while (!signal.aborted) {
-  //       await new Promise((resolve) => {
-  //         const timer = setTimeout(resolve, 60_000);
-  //         signal.addEventListener(
-  //           "abort",
-  //           () => { clearTimeout(timer); resolve(undefined); },
-  //           { once: true },
-  //         );
-  //       });
-  //     }
-  //   },
-  // });
+  const tools = buildTools({
+    client,
+    settings: () => ({ confirmAgentPosts: current.confirmAgentPosts, allowAgentWrites: current.allowAgentWrites, defaultTimeline: current.defaultTimeline }),
+    requestPostApproval,
+    createPost,
+    lockIn: {
+      state: lockInState,
+      start: (title, threadId) => lockInStart(title, threadId, true),
+      finish: (id, threadId) => lockInFinish(id, threadId, true),
+      addTodo,
+      completeTodo,
+    },
+    markNotificationsRead,
+  });
+  for (const tool of tools) {
+    bb.agents.registerTool({
+      name: tool.name,
+      description: tool.description,
+      ...(tool.instructions ? { instructions: tool.instructions } : {}),
+      ...(tool.presentation ? { presentation: tool.presentation } : {}),
+      parameters: tool.parameters,
+      execute: (input, context) => tool.execute(input as never, context),
+    });
+  }
+
+  // ---- CLI -------------------------------------------------------------------
+
+  bb.cli.register(
+    buildCli({
+      client,
+      status: () => service.status(),
+      refresh: () => service.refresh(),
+      settings: () => ({ defaultTimeline: current.defaultTimeline }),
+      createPost,
+      lockIn: {
+        state: lockInState,
+        start: (title, threadId) => lockInStart(title, threadId, false),
+        finish: (id, threadId) => lockInFinish(id, threadId, false),
+        addTodo,
+        completeTodo,
+      },
+    }),
+  );
+
+  bb.onDispose(() => {
+    disposed = true;
+  });
 }

@@ -55,7 +55,7 @@ describe("tinkerer client", () => {
       jsonResponse(400, { code: "BAD_REQUEST", error: issues, path: "leaderboard.githubCommits" }),
     );
     const client = createTinkererClient({ getKey: () => "k", fetchImpl });
-    const error = await client.call("leaderboard/githubCommits", { period: "weekly" }).catch((e) => e);
+    const error = (await client.call("leaderboard/githubCommits", { period: "weekly" }).catch((e: unknown) => e)) as TinkererError;
     expect(error.code).toBe("BAD_REQUEST");
     expect(error.message).toBe('period: Invalid option: expected one of "today"|"week"');
   });
