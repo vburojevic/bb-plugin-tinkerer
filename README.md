@@ -133,7 +133,7 @@ actions, so you can answer a DM next to the agent you are steering.
 ## On a phone
 
 <p>
-<img alt="Timeline on a phone" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/phone-timeline.png" width="240"> <img alt="Me tab on a phone" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/phone-me.png" width="240"> <img alt="Lock-in on a phone" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/phone-lockin.png" width="240">
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/phone-timeline.png"><img alt="Timeline on a phone" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/phone-timeline.png" width="240"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/phone-me.png"><img alt="Me tab on a phone" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/phone-me.png" width="240"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/dark/phone-lockin.png"><img alt="Lock-in on a phone" src="https://raw.githubusercontent.com/vburojevic/bb-plugin-tinkerer/main/docs/media/light/phone-lockin.png" width="240"></picture>
 </p>
 
 Layouts follow the panel's own width, so the thread side panel and a phone get
